@@ -1,0 +1,10 @@
+{
+	"type": "module",
+	"scripts": {
+		"start": "ai-tester",
+		"migrations:run": "ai-tester-migrate"
+	},
+	"dependencies": {
+		"@gerukin/ai-tester": "github:gerukin/ai-tester#semver:^v0.9.0"
+	}
+}

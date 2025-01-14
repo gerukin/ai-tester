@@ -1,0 +1,45 @@
+{
+	"name": "ai-tester",
+	"version": "0.9.0",
+	"type": "module",
+	"engines": {
+		"node": ">=23.6.0",
+		"deno": ">=2.1.5",
+		"bun": ">=1.1.38"
+	},
+	"bin": {
+		"ai-tester-migrate": "./dist/scripts/migrations-run.js",
+		"ai-tester": "./dist/scripts/start.js"
+	},
+	"scripts": {
+		"compile": "tsc",
+		"publish:patch": "npm run compile && npm version patch",
+		"publish:minor": "npm run compile && npm version minor",
+		"publish:major": "npm run compile && npm version major",
+		"start": "node --no-warnings ./dist/src/index.js",
+		"start:dev": "npm run --silent compile && npm run --silent start",
+		"migrations:drizzle-kit": "npm run compile && node ./dist/scripts/migrations-all.js",
+		"migrations:gen": "npm run --silent migrations:drizzle-kit generate",
+		"migrations:gen:custom": "npm run --silent migrations:drizzle-kit generate --custom",
+		"migrations:gen:drop": "npm run --silent migrations:drizzle-kit drop",
+		"migrations:check": "npm run --silent migrations:drizzle-kit check",
+		"migrations:run": "npx ai-tester-migrate"
+	},
+	"dependencies": {
+		"@ai-sdk/google-vertex": "^2.0.16",
+		"@ai-sdk/openai": "^0.0.53",
+		"@ai-sdk/openai-compatible": "^0.0.16",
+		"@inquirer/prompts": "^7.2.2",
+		"@libsql/client": "^0.14.0",
+		"ai": "^3.4.33",
+		"dotenv": "^16.4.7",
+		"drizzle-orm": "^0.32.2",
+		"ollama-ai-provider": "^0.12.1",
+		"yaml": "^2.7.0",
+		"zod": "^3.24.1",
+		"drizzle-kit": "^0.24.2"
+	},
+	"devDependencies": {
+		"typescript": "^5.7.3"
+	}
+}
