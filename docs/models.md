@@ -7,3 +7,4 @@ Officially supported model providers are:
 - `ollama`: Ollama models
 - `openai`: OpenAI models
 - `vertex`: Vertex AI models
+- `perplexity`: Perplexity models
