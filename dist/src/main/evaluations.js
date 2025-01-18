@@ -2,7 +2,7 @@
  * This module is responsible for running all session evaluations that have not been run yet.
  */
 import { and, or, eq, ne, inArray, sql, lt, countDistinct, aliasedTable } from 'drizzle-orm';
-import { generateObject } from 'ai';
+import { generateObject, TypeValidationError } from 'ai';
 import z from 'zod';
 import { testsConfig, MAX_TOKENS, MAX_WAIT_TIME } from '../config/index.js';
 import { db } from '../database/db.js';
@@ -10,6 +10,16 @@ import { schema } from '../database/schema.js';
 import { askYesNo } from '../utils/menus.js';
 import { providers as llmProviders } from '../llms/index.js';
 import { getSectionsFromMarkdownContent, sectionsToAiMessages } from '../utils/markdown.js';
+const evalSchema = z.object({
+    // Note: `.nullable()` is not supported by some providers (like Vertex AI) as it generates an unsupported `anyOf` schema
+    feedback: z
+        .string()
+        .optional()
+        .describe('A string containing feedback for the AI candidate, based on the evaluation instructions, if the evaluation is negative. This feedback should be concise and focus on what failed to pass the evaluation.'),
+    pass: z
+        .boolean()
+        .describe("A boolean value indicating whether the AI candidate's response is as expected in the evaluation instructions."),
+});
 export const runAllEvaluations = async () => {
     console.log('Checking for evaluations to run...');
     // we query the DB to get all missing evaluations not yet run
@@ -128,23 +138,30 @@ export const runAllEvaluations = async () => {
         for (let judgment = evaluation.evaluationsCount; judgment < testsConfig.evaluationsPerEvaluator; judgment++) {
             // run the test
             const startTime = Date.now();
-            const response = await generateObject({
-                model,
-                schema: z.object({
-                    // Note: `.nullable()` is not supported by some providers (like Vertex AI) as it generates an unsupported `anyOf` schema
-                    feedback: z
-                        .string()
-                        .optional()
-                        .describe('A string containing feedback for the AI candidate, based on the evaluation instructions, if the evaluation is negative. This feedback should be concise and focus on what failed to pass the evaluation.'),
-                    pass: z
-                        .boolean()
-                        .describe("A boolean value indicating whether the AI candidate's response is as expected in the evaluation instructions."),
-                }),
-                messages,
-                temperature,
-                maxTokens: MAX_TOKENS,
-                abortSignal: AbortSignal.timeout(MAX_WAIT_TIME),
-            });
+            let response;
+            try {
+                response = await generateObject({
+                    model,
+                    schema: evalSchema,
+                    messages,
+                    temperature,
+                    maxTokens: MAX_TOKENS,
+                    abortSignal: AbortSignal.timeout(MAX_WAIT_TIME),
+                });
+            }
+            catch (err) {
+                if (err instanceof TypeValidationError) {
+                    console.error(`❌ Failed eval [${i} of ${totalMissingEvaluations}] with model ${evaluation.modelVersionCode} (model failed to generate a valid evaluation object)\n${err.message}`);
+                }
+                else {
+                    console.error(`❌ Failed eval [${i} of ${totalMissingEvaluations}] with model ${evaluation.modelVersionCode} (model failed to generate a valid evaluation object)`);
+                }
+                const skippedJudgments = testsConfig.evaluationsPerEvaluator - judgment;
+                i = i + (testsConfig.evaluationsPerEvaluator - judgment);
+                if (skippedJudgments > 1)
+                    console.log(`⏭️ Skipping ${skippedJudgments - 1} similar judgment(s)...`);
+                break;
+            }
             const endTime = Date.now();
             // add the response to the DB as a session
             await db.insert(sessionEvaluations).values({
