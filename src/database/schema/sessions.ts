@@ -46,6 +46,12 @@ export const sessions = sqliteTable(
 		/** Prompt tokens count */
 		promptTokens: integer('prompt_tokens').notNull(),
 
+		/** Cached prompt tokens written count */
+		cachedPromptTokensWritten: integer('cached_prompt_tokens'),
+
+		/** Cached prompt tokens read count */
+		cachedPromptTokensRead: integer('cached_prompt_tokens_read'),
+
 		/** The time taken to answer */
 		timeTaken: integer('time_taken').notNull(),
 
@@ -132,6 +138,12 @@ export const sessionEvaluations = sqliteTable(
 
 		/** Prompt tokens count */
 		promptTokens: integer('prompt_tokens').notNull(),
+
+		/** Cached prompt tokens written count */
+		cachedPromptTokensWritten: integer('cached_prompt_tokens'),
+
+		/** Cached prompt tokens read count */
+		cachedPromptTokensRead: integer('cached_prompt_tokens_read'),
 
 		/** The time taken to answer */
 		timeTaken: integer('time_taken').notNull(),

@@ -12,5 +12,6 @@ Data which needs to be manually inserted includes:
 - [ ] [Providers](config-file.md#providers)
 - [ ] [Models](config-file.md#models)
 - [ ] [Model versions](config-file.md#model-versions)
+- [ ] Model version costs and currencies
 
-Refer to the [example file](./example//data/sql/2024-01-15-1-add-models.sql) for more information on how to insert the data.
+Refer to the [example files](./example/data/sql) for more information on how to insert the data.

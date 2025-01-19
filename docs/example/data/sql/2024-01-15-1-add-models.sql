@@ -125,7 +125,7 @@ VALUES
 		NULL
 	),
 
-	-- Google
+	-- Google (on Vertex)
 	(
 		(SELECT id FROM models WHERE code = 'gemini-1.5-pro'),
 		(SELECT id FROM providers WHERE code = 'vertex'),
@@ -151,7 +151,7 @@ VALUES
 		'publishers/google/models/gemini-2.0-flash-thinking-exp-1219'
 	),
 
-	-- Anthropic
+	-- Anthropic (on Vertex)
 	(
 		(SELECT id FROM models WHERE code = 'claude-3-5-sonnet'),
 		(SELECT id FROM providers WHERE code = 'vertex'),

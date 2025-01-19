@@ -203,6 +203,12 @@ export const runAllTests = async () => {
 				temperature,
 				answer: response.text,
 				completionTokens: response.usage.completionTokens,
+				cachedPromptTokensWritten:
+					(response.experimental_providerMetadata?.['anthropic']?.['cacheCreationInputTokens'] as number) ?? undefined,
+				cachedPromptTokensRead:
+					(response.experimental_providerMetadata?.['anthropic']?.['cacheReadInputTokens'] as number) ??
+					(response.experimental_providerMetadata?.['openai']?.['cachedPromptTokens'] as number) ??
+					undefined,
 				promptTokens: response.usage.promptTokens,
 				timeTaken: endTime - startTime,
 			})
