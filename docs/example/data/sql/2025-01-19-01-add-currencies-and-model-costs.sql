@@ -187,7 +187,7 @@ VALUES
 			SELECT id
 			FROM model_versions
 			WHERE
-				provider_model_code = 'gpt-4o-2024-08-06'
+				provider_model_code = 'gpt-4o-2024-11-20'
 				AND provider_id = (SELECT id FROM providers WHERE code = 'openai')
 		),
 		(SELECT id FROM currencies WHERE iso_4217_code = 'USD'),

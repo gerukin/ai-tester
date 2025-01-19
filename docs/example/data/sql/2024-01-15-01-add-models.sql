@@ -103,7 +103,7 @@ VALUES
 	(
 		(SELECT id FROM models WHERE code = 'gpt-4o'),
 		(SELECT id FROM providers WHERE code = 'openai'),
-		'gpt-4o-2024-08-06',
+		'gpt-4o-2024-11-20',
 		NULL
 	),
 	(

@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 > [!IMPORTANT]
-> Run the migrations and refer to the [example SQL](/docs/example/data/sql/2025-01-19-1-add-currencies-and-model-costs.sql) to insert cost data for models.
+> Run the migrations and refer to the [example SQL](/docs/example/data/sql/2025-01-19-01-add-currencies-and-model-costs.sql) to insert cost data for models.
 
 ### Added
 
