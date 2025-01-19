@@ -340,7 +340,7 @@ VALUES
 			FROM model_versions
 			WHERE
 				provider_model_code = 'claude-3-5-sonnet-v2@20241022'
-				AND provider_id = (SELECT id FROM providers WHERE code = 'vertex')
+				AND provider_id = (SELECT id FROM providers WHERE code = 'vertex_anthropic')
 		),
 		(SELECT id FROM currencies WHERE iso_4217_code = 'USD'),
 
@@ -358,7 +358,7 @@ VALUES
 			FROM model_versions
 			WHERE
 				provider_model_code = 'claude-3-5-haiku@20241022'
-				AND provider_id = (SELECT id FROM providers WHERE code = 'vertex')
+				AND provider_id = (SELECT id FROM providers WHERE code = 'vertex_anthropic')
 		),
 		(SELECT id FROM currencies WHERE iso_4217_code = 'USD'),
 

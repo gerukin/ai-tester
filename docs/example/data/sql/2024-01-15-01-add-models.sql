@@ -5,6 +5,7 @@ VALUES
 	('ollama', 'Ollama'),
 	('openai', 'OpenAI'),
 	('vertex', 'Vertex AI'),
+	('vertex_anthropic', 'Vertex AI - Anthropic'),
 	('perplexity', 'Perplexity')
 ;
 
@@ -154,13 +155,13 @@ VALUES
 	-- Anthropic (on Vertex)
 	(
 		(SELECT id FROM models WHERE code = 'claude-3-5-sonnet'),
-		(SELECT id FROM providers WHERE code = 'vertex'),
+		(SELECT id FROM providers WHERE code = 'vertexAnthropic'),
 		'claude-3-5-sonnet-v2@20241022',
 		'publishers/anthropic/models/claude-3-5-sonnet-v2'
 	),
 	(
 		(SELECT id FROM models WHERE code = 'claude-3-5-haiku'),
-		(SELECT id FROM providers WHERE code = 'vertex'),
+		(SELECT id FROM providers WHERE code = 'vertexAnthropic'),
 		'claude-3-5-haiku@20241022',
 		'publishers/anthropic/models/claude-3-5-haiku'
 	),
