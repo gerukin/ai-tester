@@ -83,6 +83,19 @@ Permissions needed:
 > At the time of writing this guide, it fails to use the Vertex AI models (hangs indefinitely),
 > and likely has other failure modes as well.
 
+## Publishing
+
+```sh
+# patch version
+npm run publish:patch
+
+# minor version
+npm run publish:minor
+
+# major version
+npm run publish:major
+```
+
 ## Changes
 
 All changes must be documented in the [changelog](CHANGELOG.md).
