@@ -26,18 +26,18 @@
 		"migrations:run": "npx ai-tester-migrate"
 	},
 	"dependencies": {
-		"@ai-sdk/google-vertex": "^2.0.16",
-		"@ai-sdk/openai": "^0.0.53",
-		"@ai-sdk/openai-compatible": "^0.0.16",
-		"@inquirer/prompts": "^7.2.2",
+		"@ai-sdk/google-vertex": "^2.1.11",
+		"@ai-sdk/openai": "^1.1.9",
+		"@ai-sdk/openai-compatible": "^0.1.8",
+		"@inquirer/prompts": "^7.3.1",
 		"@libsql/client": "^0.14.0",
-		"ai": "^3.4.33",
+		"ai": "^4.1.26",
 		"dotenv": "^16.4.7",
-		"drizzle-orm": "^0.32.2",
-		"ollama-ai-provider": "^0.12.1",
+		"drizzle-kit": "^0.30.4",
+		"drizzle-orm": "^0.39.2",
+		"ollama-ai-provider": "^1.2.0",
 		"yaml": "^2.7.0",
-		"zod": "^3.24.1",
-		"drizzle-kit": "^0.24.2"
+		"zod": "^3.24.1"
 	},
 	"devDependencies": {
 		"typescript": "^5.7.3"
