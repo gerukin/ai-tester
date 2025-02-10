@@ -89,11 +89,13 @@ Permissions needed:
 # patch version
 npm run publish:patch
 
-# minor version
-npm run publish:minor
+# # minor version
+# npm run publish:minor
 
-# major version
-npm run publish:major
+# # major version
+# npm run publish:major
+
+git push --tags
 ```
 
 ## Changes
