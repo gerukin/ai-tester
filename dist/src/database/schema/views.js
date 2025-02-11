@@ -13,6 +13,7 @@ export const evaluatedSessionsView = sqliteView('evaluated_sessions_view').as(qb
         candidate_model: modelVersions.providerModelCode,
         sys_prompt: promptVersions.content,
         test_prompt: testVersions.content,
+        reasoning: sessions.reasoning,
         answer: sessions.answer,
         eval_inst: testEvaluationInstructionsVersions.content,
         evaluator_model: evalModelAlias.providerModelCode,

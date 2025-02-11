@@ -35,7 +35,19 @@ export const SPECIAL_TAGS = new Map([
     ],
 ]);
 export const DEFAULT_TEMPERATURE = 0.3, DEFAULT_ATTEMPTS = 1, DEFAULT_EVALUATIONS = 3, DEFAULT_PROHIBITED_TAGS = ['skip', 'example'], CONFIG_FILE_PATH = envConfig.AI_TESTER_CONFIG_PATH ?? 'ai-tester.config.yaml', 
-/** TODO: to improve (this is a very blunt instrument) */
-MAX_TOKENS = 500, 
-/** TODO: 20s - to improve (this is a very blunt instrument) */
-MAX_WAIT_TIME = 1000 * 20; // 20 seconds
+/**
+ * TODO: 1500 to improve!
+ *
+ * This is a very blunt instrument. Some models, like reasoning models, need more.
+ * Some tests should pass with few tokens and others should be allowed to use more.
+ * Whether the model responds under an acceptable token limit could be used to consider whether the test is passed.
+ */
+MAX_TOKENS = 1500, 
+/**
+ * TODO: 120s - to improve!
+ *
+ * This is a very blunt instrument. Some models, like reasoning models, need more.
+ * Some tests should pass quickly and others should be allowed to take longer.
+ * Whether the model responds within an acceptable time frame could be used to consider whether the test is passed.
+ */
+MAX_WAIT_TIME = 1000 * 120; // 120 seconds

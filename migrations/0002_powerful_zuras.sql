@@ -1,0 +1,31 @@
+ALTER TABLE `sessions` ADD `reasoning` text;--> statement-breakpoint
+CREATE VIEW `evaluated_sessions_view` AS
+select
+	"model_versions"."provider_model_code" AS "candidate_model",
+	"prompt_versions"."content" AS "sys_prompt",
+	"test_versions"."content" AS "test_prompt",
+	"sessions"."reasoning" AS "reasoning",
+	"sessions"."answer" AS "answer",
+	"test_evaluation_instructions_versions"."content" AS "eval_inst",
+	"eval_model_version"."provider_model_code" AS "evaluator_model",
+	"session_evaluations"."pass" AS "pass",
+	"session_evaluations"."feedback" AS "feedback",
+	"sessions"."temperature" AS "candidate_temp",
+	"session_evaluations"."temperature" AS "evaluator_temp",
+	group_concat("tags"."name", ', ') as "tags",
+	"prompt_versions"."active" AS "sys_prompt_active",
+	"test_versions"."active" AS "test_prompt_active",
+	"test_evaluation_instructions_versions"."active" AS "eval_inst_active",
+	"eval_prompt_version"."active" AS "eval_sys_prompt_active",
+	"sessions"."created_at" AS "session_at",
+	"session_evaluations"."created_at" AS "evaluation_at",
+	"sessions"."id" AS "session_id",
+	"test_versions"."id" AS "test_version_id",
+	"sessions"."model_version_id" AS "candidate_model_version_id",
+	"sessions"."candidate_sys_prompt_version_id" AS "candidate_sys_prompt_version_id",
+	"session_evaluations"."model_version_id" AS "evaluator_model_version_id",
+	"session_evaluations"."test_evaluation_instructions_version_id" AS "test_evaluation_instructions_version_id",
+	"session_evaluations"."evaluation_prompt_version_id" AS "evaluation_prompt_version_id",
+	"session_evaluations"."id" AS "session_evaluation_id",
+	"eval_prompt_version"."content" AS "eval_sys_prompt"
+	from "sessions" inner join "test_versions" on "sessions"."test_version_id" = "test_versions"."id" inner join "model_versions" on "sessions"."model_version_id" = "model_versions"."id" inner join "prompt_versions" on "sessions"."candidate_sys_prompt_version_id" = "prompt_versions"."id" left join "session_evaluations" on "sessions"."id" = "session_evaluations"."session_id" left join "prompt_versions" "eval_prompt_version" on "session_evaluations"."evaluation_prompt_version_id" = "eval_prompt_version"."id" left join "test_evaluation_instructions_versions" on "session_evaluations"."test_evaluation_instructions_version_id" = "test_evaluation_instructions_versions"."id" left join "model_versions" "eval_model_version" on "session_evaluations"."model_version_id" = "eval_model_version"."id" inner join "test_to_tag_rels" on "test_versions"."id" = "test_to_tag_rels"."test_version_id" inner join "tags" on "test_to_tag_rels"."tag_id" = "tags"."id" group by "sessions"."id", "session_evaluations"."id" order by "session_evaluations"."created_at" desc, "sessions"."created_at" desc;

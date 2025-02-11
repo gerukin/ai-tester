@@ -11,3 +11,5 @@ export const providers = {
 	vertex_anthropic, // matches the DB code
 	perplexity,
 } as const
+
+export { wrapModel } from './helpers/wraper.js'

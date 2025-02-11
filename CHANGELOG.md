@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Preliminary support for reasoning models (limited to Deepseek-R1 on Ollama) with hardcoded maximum 120 sec and 1500 token limits (this will be configurable in the future).
+- Simple view in the database to review answers and evaluations more easily.
+
+### Changed
+
+- Trim whitespaces from answers and evaluation feedback.
+
 ## [0.9.2] - 2025-19-01
 
 > [!IMPORTANT]

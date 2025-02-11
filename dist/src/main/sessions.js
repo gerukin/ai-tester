@@ -7,7 +7,7 @@ import { testsConfig, MAX_TOKENS, MAX_WAIT_TIME } from '../config/index.js';
 import { db } from '../database/db.js';
 import { schema } from '../database/schema.js';
 import { askYesNo } from '../utils/menus.js';
-import { providers as llmProviders } from '../llms/index.js';
+import { providers as llmProviders, wrapModel } from '../llms/index.js';
 import { getSectionsFromMarkdownContent, sectionsToAiMessages } from '../utils/markdown.js';
 export const runAllTests = async () => {
     console.log('Checking for tests to run...');
@@ -90,7 +90,7 @@ export const runAllTests = async () => {
         const provider = llmProviders[test.providerCode];
         if (!provider)
             throw new Error(`Provider ${test.providerCode} not found`);
-        const model = provider(test.modelVersionCode);
+        const model = wrapModel(provider(test.modelVersionCode));
         const temperature = modelsWithTemperatures.get(`${test.providerCode}:${test.modelVersionCode}`) ?? testsConfig.candidatesTemperature;
         // We extract the array of messages
         const sections = getSectionsFromMarkdownContent(test.testContent);
@@ -118,7 +118,8 @@ export const runAllTests = async () => {
                 candidateSysPromptVersionId: test.sysPromptVersionId,
                 modelVersionId: test.modelVersionId,
                 temperature,
-                answer: response.text,
+                reasoning: response.reasoning?.trim(),
+                answer: response.text.trim(),
                 completionTokens: response.usage.completionTokens,
                 cachedPromptTokensWritten: response.experimental_providerMetadata?.['anthropic']?.['cacheCreationInputTokens'] ?? undefined,
                 cachedPromptTokensRead: response.experimental_providerMetadata?.['anthropic']?.['cacheReadInputTokens'] ??

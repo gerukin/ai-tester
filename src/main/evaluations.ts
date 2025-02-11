@@ -10,7 +10,7 @@ import { testsConfig, MAX_TOKENS, MAX_WAIT_TIME } from '../config/index.js'
 import { db } from '../database/db.js'
 import { schema } from '../database/schema.js'
 import { askYesNo } from '../utils/menus.js'
-import { providers as llmProviders } from '../llms/index.js'
+import { providers as llmProviders, wrapModel } from '../llms/index.js'
 import { getSectionsFromMarkdownContent, sectionsToAiMessages } from '../utils/markdown.js'
 
 const evalSchema = z.object({
@@ -215,7 +215,7 @@ export const runAllEvaluations = async () => {
 	for (const evaluation of missingEvaluations) {
 		const provider = llmProviders[evaluation.providerCode as keyof typeof llmProviders]
 		if (!provider) throw new Error(`Provider ${evaluation.providerCode} not found`)
-		const model = provider(evaluation.modelVersionCode)
+		const model = wrapModel(provider(evaluation.modelVersionCode))
 
 		const temperature =
 			modelsWithTemperatures.get(`${evaluation.providerCode}:${evaluation.modelVersionCode}`) ??
@@ -279,7 +279,7 @@ export const runAllEvaluations = async () => {
 				modelVersionId: evaluation.modelVersionId,
 				temperature,
 				pass: response.object.pass ? 1 : 0,
-				feedback: response.object.feedback ? response.object.feedback : null, // null if empty
+				feedback: response.object.feedback ? response.object.feedback.trim() : null, // null if empty
 				completionTokens: response.usage.completionTokens,
 				promptTokens: response.usage.promptTokens,
 				timeTaken: endTime - startTime,
