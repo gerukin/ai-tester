@@ -194,7 +194,7 @@ VALUES
 
 		0,
 		2.5/1000000,
-		10/1000000,
+		10.0/1000000,
 		0,
 
 		-- valid from the first date for the sessions table entries
@@ -229,8 +229,8 @@ VALUES
 		(SELECT id FROM currencies WHERE iso_4217_code = 'USD'),
 
 		0,
-		15/1000000,
-		60/1000000,
+		15.0/1000000,
+		60.0/1000000,
 		0,
 
 		-- valid from the first date for the sessions table entries
@@ -247,8 +247,8 @@ VALUES
 		(SELECT id FROM currencies WHERE iso_4217_code = 'USD'),
 
 		0,
-		3/1000000,
-		12/1000000,
+		3.0/1000000,
+		12.0/1000000,
 		0,
 
 		-- valid from the first date for the sessions table entries
@@ -345,8 +345,8 @@ VALUES
 		(SELECT id FROM currencies WHERE iso_4217_code = 'USD'),
 
 		0,
-		3/1000000,
-		15/1000000,
+		3.0/1000000,
+		15.0/1000000,
 		0,
 
 		-- valid from the first date for the sessions table entries
@@ -364,7 +364,7 @@ VALUES
 
 		0,
 		0.8/1000000,
-		4/1000000,
+		4.0/1000000,
 		0,
 
 		-- valid from the first date for the sessions table entries
@@ -382,7 +382,7 @@ VALUES
 		),
 		(SELECT id FROM currencies WHERE iso_4217_code = 'USD'),
 
-		5/1000,
+		5.0/1000,
 		0.2/1000000,
 		0.2/1000000,
 		0,
@@ -400,9 +400,9 @@ VALUES
 		),
 		(SELECT id FROM currencies WHERE iso_4217_code = 'USD'),
 
-		5/1000,
-		1/1000000,
-		1/1000000,
+		5.0/1000,
+		1.0/1000000,
+		1.0/1000000,
 		0,
 
 		-- valid from the first date for the sessions table entries
@@ -418,9 +418,9 @@ VALUES
 		),
 		(SELECT id FROM currencies WHERE iso_4217_code = 'USD'),
 
-		5/1000,
-		5/1000000,
-		5/1000000,
+		5.0/1000,
+		5.0/1000000,
+		5.0/1000000,
 		0,
 
 		-- valid from the first date for the sessions table entries

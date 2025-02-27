@@ -1,4 +1,4 @@
-import { text, integer, sqliteTable, unique } from 'drizzle-orm/sqlite-core';
+import { text, integer, real, sqliteTable, unique } from 'drizzle-orm/sqlite-core';
 import { sql, relations } from 'drizzle-orm';
 import { modelVersions } from './models.js';
 export const currencies = sqliteTable('currencies', {
@@ -17,7 +17,7 @@ export const currencyRates = sqliteTable('currency_rates', {
     /** The currency id */
     currencyId: integer('currency_id').notNull(),
     /** The rate in USD from the valid from date */
-    rateInUSD: integer('rate_in_usd').notNull(),
+    rateInUSD: real('rate_in_usd').notNull(),
     /** Date the rate is valid from */
     validFrom: integer('valid_from', { mode: 'timestamp' })
         .notNull()
@@ -38,13 +38,13 @@ export const modelCosts = sqliteTable('model_costs', {
     /** Currency id */
     currencyId: integer('currency_id').notNull(),
     /** The cost per call */
-    costPerCall: integer('cost_per_call').notNull(),
+    costPerCall: real('cost_per_call').notNull(),
     /** The cost per prompt token */
-    costPerPromptToken: integer('cost_per_prompt_token').notNull(),
+    costPerPromptToken: real('cost_per_prompt_token').notNull(),
     /** The cost per completion token */
-    costPerCompletionToken: integer('cost_per_completion_token').notNull(),
+    costPerCompletionToken: real('cost_per_completion_token').notNull(),
     /** The cost per hour */
-    costPerHour: integer('cost_per_hour').notNull(),
+    costPerHour: real('cost_per_hour').notNull(),
     /** Date the cost is valid from */
     validFrom: integer('valid_from', { mode: 'timestamp' })
         .notNull()
