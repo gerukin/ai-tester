@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.9.3] - 2025-03-02
+## [0.9.4] - 2025-03-02
 
 ### Added
 
@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Trim whitespaces from answers and evaluation feedback.
+
+## [0.9.3] - 2025-02-09
+
+### Changed
+
+- Better documentation for contributors and small example updates.
 
 ## [0.9.2] - 2025-01-19
 
@@ -49,7 +55,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 🎉 Version `0.9.0` is out... with all the base features. It isn't quite yet stable or tested enough to be relied upon.
 
-[Unreleased]: https://github.com/gerukin/ai-tester/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/gerukin/ai-tester/compare/v0.9.4...HEAD
+[0.9.4]: https://github.com/gerukin/ai-tester/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/gerukin/ai-tester/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/gerukin/ai-tester/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/gerukin/ai-tester/compare/v0.9.0...v0.9.1
