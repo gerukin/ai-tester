@@ -7,6 +7,7 @@ import * as providers from './schema/providers.js'
 import * as sessions from './schema/sessions.js'
 import * as tags from './schema/tags.js'
 import * as tests from './schema/tests.js'
+import * as costs from './schema/costs.js'
 // import * as views from './schema/views.js'
 
 export const schema = {
@@ -16,6 +17,7 @@ export const schema = {
 	...sessions,
 	...tags,
 	...tests,
+	...costs,
 
 	// TODO: views do not seem to be handled by DrizzleKit - will be handled manually or here in the future
 	// ...views,

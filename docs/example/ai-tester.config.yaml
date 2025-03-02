@@ -32,3 +32,17 @@ evaluators:
     model: gpt-4o-mini-2024-07-18
   - provider: vertex
     model: gemini-1.5-flash-002
+
+analysisQueries:
+  - description: All models (JPY costs)
+    currency: JPY
+
+  - description: Phi4 only - reasoning in english (JPY costs)
+    currency: JPY
+    requiredTags1:
+      - lang_en
+    requiredTags2:
+      - reasoning
+    candidates:
+      - provider: ollama
+        model: phi4:14b-q4_K_M

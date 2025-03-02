@@ -8,7 +8,7 @@
 		"verbatimModuleSyntax": true,
 
 		// Enable latest features
-		"lib": ["ESNext"],
+		"lib": ["ESNext", "DOM"],
 		"target": "ESNext",
 
 		// Handle JS

@@ -1,4 +1,4 @@
-import { confirm } from '@inquirer/prompts'
+import { confirm, select, Separator } from '@inquirer/prompts'
 
 /**
  * Ask a yes/no question to the user
@@ -12,3 +12,28 @@ export const askYesNo = (question: string, def = true): Promise<boolean> =>
 		message: question,
 		default: def,
 	})
+
+type ChoiceMenuItem =
+	| {
+			name: string
+			action?: () => void | Promise<void>
+	  }
+	| undefined
+export const selectMenu = async (message: string, choices: ChoiceMenuItem[]) => {
+	const action = await select({
+		message,
+		choices: choices.map(choiceMenuItem => {
+			if (choiceMenuItem) {
+				return {
+					name: choiceMenuItem.name,
+					value: choiceMenuItem.action,
+				}
+			}
+			return new Separator()
+		}),
+	})
+
+	if (action) {
+		await action()
+	}
+}

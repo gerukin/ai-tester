@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Preliminary support for reasoning models (limited to Deepseek-R1 on Ollama) with hardcoded maximum 120 sec and 1500 token limits (this will be configurable in the future).
 - Simple view in the database to review answers and evaluations more easily.
+- Simple statistics configurable in the config file.
+- Menu to simplify updating tests / prompts, or accessing simple stats.
 
 ### Changed
 

@@ -71,6 +71,42 @@ evaluatorsTemperature: 0.5
 
 # [optional] Total number of evaluations per response per evaluator
 evaluationsPerEvaluator: 2
+
+# Queries to analyze the results can be preset here and will be available in the menu
+analysisQueries:
+  # Description of the query (shown in the menu)
+  - description: Phi4 only - reasoning in english (JPY costs)
+
+    # Currency to use for cost analysis
+    currency: JPY
+
+    # [optional] Tags can be applied to analysis queries as well
+    # (not specified means no restriction for this query - it does not mean that default tags are applied)
+    requiredTags1:
+      - lang_en
+    requiredTags2:
+      - reasoning
+
+    # [optional] Temperature to apply to models in analysis queries
+    # (not specified means no temperature is applied)
+    candidatesTemperature: 0.5
+    # evaluatorsTemperature: 0.5
+
+    # [optional] Candidate model versions to include - follows a similar format to the main section
+    candidates:
+      - provider: ollama
+        model: phi4:14b-q4_K_M
+
+        # temperature and tags can be applied to models in analysis queries as well
+        # (not specified means no restriction for this model)
+
+    # [optional] Evaluators to include - follows a similar format to the main section
+    evaluators:
+      - provider: ollama
+        model: phi4:14b-q4_K_M
+
+        # temperature and tags can be applied to models in analysis queries as well
+        # (not specified means no restriction for this model)
 ```
 
 ### Providers
@@ -90,3 +126,20 @@ A model version is a specific version of a model. Each model version is associat
 #### Models
 
 The concept of `models` is kept in the database as well, and they are essentially groups to hold model versions. Each model can have multiple versions (potentially from different providers). This is NOT used in the config file, but can be useful for analysis.
+
+### Analysis queries
+
+Analysis queries are a way to pre-define queries to run on the database. These queries can be run from the menu, and can be filtered by tags. The results of these queries are shown in a table with various metrics:
+
+- `Model`: The model version and provider which was tested
+- Pass rate: The percentage of evaluations which passed
+- Sessions: The number of sessions which were evaluated
+- Tests: The number of tests which were evaluated
+- Evaluations: The number of evaluations which were generated
+- Cost per 100 sessions: The cost of the evaluations per 100 sessions (in the specified currency)
+- Total cost: The total cost of the evaluations (in the specified currency)
+
+> [!NOTE]
+> Only active tests with completed evaluations are shown in the analysis queries.
+>
+> For the cost analysis, the precision is limited to sensible values for the given currency. The model cost information and currency exchange rates are assumed to already be stored in the database. This is done by inserting data there directly, and not managed by this package.
