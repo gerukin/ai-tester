@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Trim whitespaces from answers and evaluation feedback.
 
-## [0.9.2] - 2025-19-01
+## [0.9.2] - 2025-01-19
 
 > [!IMPORTANT]
 > Run the migrations and refer to the [example SQL](/docs/example/data/sql/2025-01-19-01-add-currencies-and-model-costs.sql) to insert cost data for models.
@@ -37,13 +37,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Switched to the new Vertex AI Anthropic provider for all Vertex AI claude models.
 - Default openai 4o model version in examples updated to reflect the latest version.
 
-## [0.9.1] - 2025-18-01
+## [0.9.1] - 2025-01-18
 
 ### Added
 
 - Now auto skips evaluations which fail to be generated properly by the model.
 
-## [0.9.0] - 2025-15-01
+## [0.9.0] - 2025-01-15
 
 ### Added
 
