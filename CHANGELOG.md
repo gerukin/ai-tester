@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2025-06-29
+
+### Added
+
+- Enhanced statistics calculation: now orders by pass rate and cost per session for improved insights.
+- Updated token and reasoning effort constants for tests and evaluations, providing more accurate evaluation metrics.
+
 ## [0.9.4] - 2025-03-02
 
 ### Added
@@ -55,7 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 🎉 Version `0.9.0` is out... with all the base features. It isn't quite yet stable or tested enough to be relied upon.
 
-[Unreleased]: https://github.com/gerukin/ai-tester/compare/v0.9.4...HEAD
+[Unreleased]: https://github.com/gerukin/ai-tester/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/gerukin/ai-tester/compare/v0.9.4...v0.10.0
 [0.9.4]: https://github.com/gerukin/ai-tester/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/gerukin/ai-tester/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/gerukin/ai-tester/compare/v0.9.1...v0.9.2
