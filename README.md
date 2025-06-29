@@ -85,6 +85,9 @@ Permissions needed:
 
 ## Publishing
 
+> [!TIP]
+> Ask copilot to guide you and work out the changes using the `create-new-version` prompt.
+
 ```sh
 # patch version
 npm run publish:patch
@@ -98,6 +101,6 @@ npm run publish:patch
 git push --tags
 ```
 
-## Changes
+### Changes
 
 All changes must be documented in the [changelog](CHANGELOG.md).
