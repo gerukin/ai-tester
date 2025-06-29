@@ -127,7 +127,7 @@ export const showStats = async (query) => {
         // We group by model version (note: this column in the CTE is aliased, and Drizzle is confused by this so we need to ignore the TS error until they support it properly - there are no cleaner workarounds at this time)
         // @ts-ignore
         .groupBy(cte.modelVersionId)
-        .orderBy(desc(passRateQuery), desc(costPerSessionQuery));
+        .orderBy(desc(passRateQuery), costPerSessionQuery);
     const tmpCurrency = new Intl.NumberFormat(LOCALE, {
         style: 'currency',
         currency: query.currency,

@@ -245,7 +245,7 @@ export const showStats = async (query: AnalysisQuery) => {
 		// @ts-ignore
 		.groupBy(cte.modelVersionId)
 
-		.orderBy(desc(passRateQuery), desc(costPerSessionQuery))
+		.orderBy(desc(passRateQuery), costPerSessionQuery)
 
 	const tmpCurrency = new Intl.NumberFormat(LOCALE, {
 		style: 'currency',
