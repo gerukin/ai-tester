@@ -226,6 +226,8 @@ export const showStats = async (query: AnalysisQuery) => {
 			.orderBy(desc(sql`CAST(SUM(${sessionEvaluations.pass}) AS REAL) / COUNT(${sessionEvaluations.pass})`))
 	)
 
+	const passRateQuery = sql<number>`SUM(${cte.passRate}) / CAST(COUNT(*) AS REAL)`
+	const costPerSessionQuery = sql<number>`SUM(${cte.costPerSession}) / COUNT(*)`
 	const stats = await db
 		.with(cte)
 		.select({
@@ -234,14 +236,16 @@ export const showStats = async (query: AnalysisQuery) => {
 			evalsCount: sql<number>`SUM(${cte.evalsCount})`,
 			modelVersionCode: cte.modelVersionCode,
 			providerCode: cte.providerCode,
-			passRate: sql<number>`SUM(${cte.passRate}) / CAST(COUNT(*) AS REAL)`,
-			costPerSession: sql<number>`SUM(${cte.costPerSession}) / COUNT(*)`.as('costPerSession'),
+			passRate: passRateQuery,
+			costPerSession: costPerSessionQuery.as('costPerSession'),
 		})
 		.from(cte)
 
 		// We group by model version (note: this column in the CTE is aliased, and Drizzle is confused by this so we need to ignore the TS error until they support it properly - there are no cleaner workarounds at this time)
 		// @ts-ignore
 		.groupBy(cte.modelVersionId)
+
+		.orderBy(desc(passRateQuery), desc(costPerSessionQuery))
 
 	const tmpCurrency = new Intl.NumberFormat(LOCALE, {
 		style: 'currency',
