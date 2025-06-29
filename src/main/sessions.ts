@@ -5,7 +5,13 @@
 import { and, or, eq, ne, inArray, sql, lt, countDistinct } from 'drizzle-orm'
 import { generateText } from 'ai'
 
-import { testsConfig, MAX_TOKENS, MAX_WAIT_TIME } from '../config/index.js'
+import {
+	testsConfig,
+	MAX_TEST_REASONING_EFFORT,
+	MAX_TEST_OUTPUT_TOKENS,
+	MAX_TEST_THINKING_TOKENS,
+	MAX_WAIT_TIME,
+} from '../config/index.js'
 import { db } from '../database/db.js'
 import { schema } from '../database/schema.js'
 import { askYesNo } from '../utils/menus.js'
@@ -190,7 +196,18 @@ export const runAllTests = async () => {
 				system: test.sysPromptContent,
 				messages,
 				temperature,
-				maxTokens: MAX_TOKENS,
+				providerOptions: {
+					openai: {
+						reasoningEffort: MAX_TEST_REASONING_EFFORT,
+					},
+					vertex: {
+						thinkingConfig: { includeThoughts: true, thinkingBudget: MAX_TEST_THINKING_TOKENS },
+					},
+					anthropic: {
+						thinking: { type: 'enabled', budgetTokens: MAX_TEST_THINKING_TOKENS },
+					},
+				},
+				maxTokens: MAX_TEST_OUTPUT_TOKENS,
 				abortSignal: AbortSignal.timeout(MAX_WAIT_TIME),
 			})
 			const endTime = Date.now()

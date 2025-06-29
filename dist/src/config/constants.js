@@ -36,18 +36,32 @@ export const SPECIAL_TAGS = new Map([
 ]);
 export const DEFAULT_TEMPERATURE = 0.3, DEFAULT_ATTEMPTS = 1, DEFAULT_EVALUATIONS = 3, DEFAULT_PROHIBITED_TAGS = ['skip', 'example'], CONFIG_FILE_PATH = envConfig.AI_TESTER_CONFIG_PATH ?? 'ai-tester.config.yaml', 
 /**
- * TODO: 1500 to improve!
- *
- * This is a very blunt instrument. Some models, like reasoning models, need more.
- * Some tests should pass with few tokens and others should be allowed to use more.
- * Whether the model responds under an acceptable token limit could be used to consider whether the test is passed.
+ * The maximum reasoning effort in a test
  */
-MAX_TOKENS = 1500, 
+MAX_TEST_REASONING_EFFORT = 'low', 
+/**
+ * The maximum reasoning effort in an evaluation
+ */
+MAX_EVALUATION_REASONING_EFFORT = 'low', 
+/**
+ * The maximum number of tokens the model can use to answer a test.
+ */
+MAX_TEST_OUTPUT_TOKENS = 2000, 
+/**
+ * The maximum number of tokens the model can use to think about the test.
+ */
+MAX_TEST_THINKING_TOKENS = 5000, 
+/**
+ * The maximum number of tokens the model can use to generate an evaluation.
+ */
+MAX_EVALUATION_OUTPUT_TOKENS = 500, 
+/**
+ * The maximum number of tokens the model can use to think about the evaluation.
+ */
+MAX_EVALUATION_THINKING_TOKENS = 2000, 
 /**
  * TODO: 120s - to improve!
  *
- * This is a very blunt instrument. Some models, like reasoning models, need more.
- * Some tests should pass quickly and others should be allowed to take longer.
- * Whether the model responds within an acceptable time frame could be used to consider whether the test is passed.
+ * The maximum time the model can take to answer a test or an evaluation.
  */
 MAX_WAIT_TIME = 1000 * 120; // 120 seconds
