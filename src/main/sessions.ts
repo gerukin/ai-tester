@@ -5,13 +5,7 @@
 import { and, or, eq, ne, inArray, sql, lt, countDistinct } from 'drizzle-orm'
 import { generateText } from 'ai'
 
-import {
-	testsConfig,
-	MAX_TEST_REASONING_EFFORT,
-	MAX_TEST_OUTPUT_TOKENS,
-	MAX_TEST_THINKING_TOKENS,
-	MAX_WAIT_TIME,
-} from '../config/index.js'
+import { testsConfig, MAX_TEST_OUTPUT_TOKENS, MAX_WAIT_TIME } from '../config/index.js'
 import { db } from '../database/db.js'
 import { schema } from '../database/schema.js'
 import { askYesNo } from '../utils/menus.js'
@@ -173,7 +167,7 @@ export const runAllTests = async () => {
 	for (const test of missingTests) {
 		const provider = llmProviders[test.providerCode as keyof typeof llmProviders]
 		if (!provider) throw new Error(`Provider ${test.providerCode} not found`)
-		const model = wrapModel(provider(test.modelVersionCode))
+		const model = wrapModel(provider(test.modelVersionCode), 'candidate')
 
 		const temperature =
 			modelsWithTemperatures.get(`${test.providerCode}:${test.modelVersionCode}`) ?? testsConfig.candidatesTemperature
@@ -196,17 +190,6 @@ export const runAllTests = async () => {
 				system: test.sysPromptContent,
 				messages,
 				temperature,
-				providerOptions: {
-					openai: {
-						reasoningEffort: MAX_TEST_REASONING_EFFORT,
-					},
-					vertex: {
-						thinkingConfig: { includeThoughts: true, thinkingBudget: MAX_TEST_THINKING_TOKENS },
-					},
-					anthropic: {
-						thinking: { type: 'enabled', budgetTokens: MAX_TEST_THINKING_TOKENS },
-					},
-				},
 				maxTokens: MAX_TEST_OUTPUT_TOKENS,
 				abortSignal: AbortSignal.timeout(MAX_WAIT_TIME),
 			})

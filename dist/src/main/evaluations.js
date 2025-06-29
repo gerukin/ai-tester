@@ -4,7 +4,7 @@
 import { and, or, eq, ne, inArray, sql, lt, countDistinct, aliasedTable } from 'drizzle-orm';
 import { generateObject, TypeValidationError } from 'ai';
 import z from 'zod';
-import { testsConfig, MAX_EVALUATION_REASONING_EFFORT, MAX_EVALUATION_OUTPUT_TOKENS, MAX_EVALUATION_THINKING_TOKENS, MAX_WAIT_TIME, } from '../config/index.js';
+import { testsConfig, MAX_EVALUATION_OUTPUT_TOKENS, MAX_WAIT_TIME } from '../config/index.js';
 import { db } from '../database/db.js';
 import { schema } from '../database/schema.js';
 import { askYesNo } from '../utils/menus.js';
@@ -113,7 +113,7 @@ export const runAllEvaluations = async () => {
         const provider = llmProviders[evaluation.providerCode];
         if (!provider)
             throw new Error(`Provider ${evaluation.providerCode} not found`);
-        const model = wrapModel(provider(evaluation.modelVersionCode));
+        const model = wrapModel(provider(evaluation.modelVersionCode), 'evaluator');
         const temperature = modelsWithTemperatures.get(`${evaluation.providerCode}:${evaluation.modelVersionCode}`) ??
             testsConfig.evaluatorsTemperature;
         // We extract the array of messages
@@ -145,17 +145,6 @@ export const runAllEvaluations = async () => {
                     schema: evalSchema,
                     messages,
                     temperature,
-                    providerOptions: {
-                        openai: {
-                            reasoningEffort: MAX_EVALUATION_REASONING_EFFORT,
-                        },
-                        vertex: {
-                            thinkingConfig: { includeThoughts: true, thinkingBudget: MAX_EVALUATION_THINKING_TOKENS },
-                        },
-                        anthropic: {
-                            thinking: { type: 'enabled', budgetTokens: MAX_EVALUATION_THINKING_TOKENS },
-                        },
-                    },
                     maxTokens: MAX_EVALUATION_OUTPUT_TOKENS,
                     abortSignal: AbortSignal.timeout(MAX_WAIT_TIME),
                 });
