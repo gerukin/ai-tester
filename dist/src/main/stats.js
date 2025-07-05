@@ -20,9 +20,23 @@ export const showStats = async (query) => {
     // we query the DB to get all missing tests not yet run
     const { testVersions, testToTagRels, tags, sessions, modelVersions, providers, currencies, currencyRates, modelCosts, } = schema;
     const targetCurrencyAlias = aliasedTable(currencies, 'target_currency_alias');
-    const targetCurrencyRateAlias = aliasedTable(currencyRates, 'target_currency_rate_alias');
     const evaluatorModelVersionAlias = aliasedTable(modelVersions, 'evaluator_model_version_alias');
     const evaluatorProviderAlias = aliasedTable(providers, 'evaluator_provider_alias');
+    const now = sql `strftime('%s', 'now')`;
+    // We want to get the currency rate closest to the current time, with a preference for past rates if available
+    const getCurrencyRate = (targetCurrencyTable) => {
+        return sql `
+			(
+				SELECT ${currencyRates.rateInUSD}
+				FROM ${currencyRates}
+				WHERE ${currencyRates.currencyId} = ${targetCurrencyTable.id}
+				ORDER BY
+					(CASE WHEN ${currencyRates.validFrom} <= ${now} THEN 0 ELSE 1 END),
+					(CASE WHEN ${currencyRates.validFrom} <= ${now} THEN -1 ELSE 1 END) * ${currencyRates.validFrom}
+				LIMIT 1
+			)
+		`;
+    };
     const cte = db.$with('cte').as(db
         .select({
         testVersionId: testVersions.id,
@@ -38,13 +52,13 @@ export const showStats = async (query) => {
         passRate: sql `SUM(${sessionEvaluations.pass}) / CAST(COUNT(${sessionEvaluations.pass}) AS REAL)`.as('passRate'),
         // evaluations are also included (which means costs are overestimates) so we divide by the count of everything at the end
         costPerSession: sql `
-					(
-						${modelCosts.costPerCall} * COUNT(${sessions.id})
-						+ ${modelCosts.costPerPromptToken} * SUM(${sessions.promptTokens})
-						+ ${modelCosts.costPerCompletionToken} * SUM(${sessions.completionTokens})
-						+ ${modelCosts.costPerHour} * SUM(${sessions.timeTaken}) / 1000 / 60 / CAST(60 AS REAL)
-					) / COUNT(*) * ${currencyRates.rateInUSD} / ${targetCurrencyRateAlias.rateInUSD}
-				`.as('costPerSession'),
+				   (
+					   ${modelCosts.costPerCall} * COUNT(${sessions.id})
+					   + ${modelCosts.costPerPromptToken} * SUM(${sessions.promptTokens})
+					   + ${modelCosts.costPerCompletionToken} * SUM(${sessions.completionTokens})
+					   + ${modelCosts.costPerHour} * SUM(${sessions.timeTaken}) / 1000 / 60 / CAST(60 AS REAL)
+				   ) / COUNT(*) * ${getCurrencyRate(currencies)} / ${getCurrencyRate(targetCurrencyAlias)}
+			   `.as('costPerSession'),
     })
         .from(sessions)
         .innerJoin(sessionEvaluations, and(eq(sessionEvaluations.sessionId, sessions.id), evaluatorModelConfigsWithTemperature.length > 0
@@ -63,9 +77,7 @@ export const showStats = async (query) => {
         .innerJoin(modelCosts, eq(modelCosts.modelVersionId, modelVersions.id))
         .innerJoin(currencies, eq(currencies.id, modelCosts.currencyId))
         .innerJoin(testVersions, and(eq(testVersions.id, sessions.testVersionId), eq(testVersions.active, true)))
-        .innerJoin(currencyRates, eq(currencyRates.currencyId, currencies.id))
         .innerJoin(targetCurrencyAlias, eq(targetCurrencyAlias.code, query.currency))
-        .innerJoin(targetCurrencyRateAlias, eq(targetCurrencyRateAlias.currencyId, targetCurrencyAlias.id))
         // We will need to filter by tags
         .innerJoin(testToTagRels, eq(testToTagRels.testVersionId, testVersions.id))
         .innerJoin(tags, eq(tags.id, testToTagRels.tagId))
