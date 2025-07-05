@@ -22,21 +22,6 @@ export const showStats = async (query) => {
     const targetCurrencyAlias = aliasedTable(currencies, 'target_currency_alias');
     const evaluatorModelVersionAlias = aliasedTable(modelVersions, 'evaluator_model_version_alias');
     const evaluatorProviderAlias = aliasedTable(providers, 'evaluator_provider_alias');
-    const now = sql `strftime('%s', 'now')`;
-    // We want to get the currency rate closest to the current time, with a preference for past rates if available
-    const getCurrencyRate = (targetCurrencyTable) => {
-        return sql `
-			(
-				SELECT ${currencyRates.rateInUSD}
-				FROM ${currencyRates}
-				WHERE ${currencyRates.currencyId} = ${targetCurrencyTable.id}
-				ORDER BY
-					(CASE WHEN ${currencyRates.validFrom} <= ${now} THEN 0 ELSE 1 END),
-					(CASE WHEN ${currencyRates.validFrom} <= ${now} THEN -1 ELSE 1 END) * ${currencyRates.validFrom}
-				LIMIT 1
-			)
-		`;
-    };
     const cte = db.$with('cte').as(db
         .select({
         testVersionId: testVersions.id,
@@ -46,19 +31,15 @@ export const showStats = async (query) => {
         // (but this makes it impossible to use the column in the group by clause of the outer query - which is why we ignore the TS error)
         modelVersionId: sql `${modelVersions.id}`.as('modelVersionId'),
         // for each test version and model version, we count the number of sessions, and evaluations
-        // + pass rate (for the test accross all sessions and evals for this test)
-        sessionsCount: countDistinct(sessions.id).as('sessionsCount'),
+        // + pass rate (for the test across all sessions and evals for this test)
         evalsCount: countDistinct(sessionEvaluations.id).as('evalsCount'),
+        sessionsCount: countDistinct(sessions.id).as('sessionsCount'),
         passRate: sql `SUM(${sessionEvaluations.pass}) / CAST(COUNT(${sessionEvaluations.pass}) AS REAL)`.as('passRate'),
-        // evaluations are also included (which means costs are overestimates) so we divide by the count of everything at the end
-        costPerSession: sql `
-				   (
-					   ${modelCosts.costPerCall} * COUNT(${sessions.id})
-					   + ${modelCosts.costPerPromptToken} * SUM(${sessions.promptTokens})
-					   + ${modelCosts.costPerCompletionToken} * SUM(${sessions.completionTokens})
-					   + ${modelCosts.costPerHour} * SUM(${sessions.timeTaken}) / 1000 / 60 / CAST(60 AS REAL)
-				   ) / COUNT(*) * ${getCurrencyRate(currencies)} / ${getCurrencyRate(targetCurrencyAlias)}
-			   `.as('costPerSession'),
+        // We calculate the average number of prompt and completion tokens, and time taken per per test per model version
+        // (note: we divide by the number of rows, since the SUMs are including additional rows for each session and evaluation)
+        sessionPromptTokens: sql `SUM(${sessions.promptTokens}) / COUNT(*)`.as('sessionPromptTokens'),
+        sessionCompletionTokens: sql `SUM(${sessions.completionTokens}) / COUNT(*)`.as('sessionCompletionTokens'),
+        timeTakenPerSession: sql `SUM(${sessions.timeTaken}) / COUNT(*)`.as('timeTaken'),
     })
         .from(sessions)
         .innerJoin(sessionEvaluations, and(eq(sessionEvaluations.sessionId, sessions.id), evaluatorModelConfigsWithTemperature.length > 0
@@ -74,10 +55,10 @@ export const showStats = async (query) => {
         .innerJoin(evaluatorModelVersionAlias, and(eq(sessionEvaluations.modelVersionId, evaluatorModelVersionAlias.id), or(...(query.evaluators?.map(({ provider, model }) => and(eq(evaluatorProviderAlias.code, provider), eq(evaluatorModelVersionAlias.providerModelCode, model))) ?? []))))
         .innerJoin(providers, eq(providers.id, modelVersions.providerId))
         .innerJoin(evaluatorProviderAlias, eq(evaluatorProviderAlias.id, evaluatorModelVersionAlias.providerId))
-        .innerJoin(modelCosts, eq(modelCosts.modelVersionId, modelVersions.id))
-        .innerJoin(currencies, eq(currencies.id, modelCosts.currencyId))
+        // .innerJoin(modelCosts, eq(modelCosts.modelVersionId, modelVersions.id))
+        // .innerJoin(currencies, eq(currencies.id, modelCosts.currencyId))
         .innerJoin(testVersions, and(eq(testVersions.id, sessions.testVersionId), eq(testVersions.active, true)))
-        .innerJoin(targetCurrencyAlias, eq(targetCurrencyAlias.code, query.currency))
+        // .innerJoin(targetCurrencyAlias, eq(targetCurrencyAlias.code, query.currency))
         // We will need to filter by tags
         .innerJoin(testToTagRels, eq(testToTagRels.testVersionId, testVersions.id))
         .innerJoin(tags, eq(tags.id, testToTagRels.tagId))
@@ -122,10 +103,51 @@ export const showStats = async (query) => {
             : []),
     ]))
         .orderBy(desc(sql `CAST(SUM(${sessionEvaluations.pass}) AS REAL) / COUNT(${sessionEvaluations.pass})`)));
+    const now = sql `strftime('%s', 'now')`;
+    // We want to get the currency rate closest to the current time, with a preference for past rates if available
+    const getCurrencyRate = (targetCurrencyTable) => {
+        return sql `
+			(
+				SELECT ${currencyRates.rateInUSD}
+				FROM ${currencyRates}
+				WHERE ${currencyRates.currencyId} = ${targetCurrencyTable.id}
+				ORDER BY
+					(CASE WHEN ${currencyRates.validFrom} <= ${now} THEN 0 ELSE 1 END),
+					(CASE WHEN ${currencyRates.validFrom} <= ${now} THEN -1 ELSE 1 END) * ${currencyRates.validFrom}
+				LIMIT 1
+			)
+		`;
+    };
+    // CTE to get the closest relevant model cost for each modelVersionId/currencyId
+    const modelCostCte = db.$with('model_cost_cte').as(db
+        .select()
+        .from(db
+        .select({
+        modelVersionId: modelCosts.modelVersionId,
+        currencyId: modelCosts.currencyId,
+        costPerCall: modelCosts.costPerCall,
+        costPerPromptToken: modelCosts.costPerPromptToken,
+        costPerCompletionToken: modelCosts.costPerCompletionToken,
+        costPerHour: modelCosts.costPerHour,
+        rowNumber: sql `ROW_NUMBER() OVER (
+						PARTITION BY ${modelCosts.modelVersionId}
+						ORDER BY
+							CASE WHEN ${modelCosts.validFrom} <= ${now} THEN 0 ELSE 1 END,
+							CASE WHEN ${modelCosts.validFrom} <= ${now} THEN -1 ELSE 1 END * ${modelCosts.validFrom}
+					)`.as('rowNumber'),
+    })
+        .from(modelCosts)
+        .as('modelCosts'))
+        .where(sql `rowNumber = 1`));
     const passRateQuery = sql `SUM(${cte.passRate}) / CAST(COUNT(*) AS REAL)`;
-    const costPerSessionQuery = sql `SUM(${cte.costPerSession}) / COUNT(*)`;
+    const costPerSessionQuery = sql `SUM(
+		${cte.sessionsCount} * ${modelCostCte.costPerCall}
+		+ ${cte.sessionPromptTokens} * ${modelCostCte.costPerPromptToken}
+		+ ${cte.sessionCompletionTokens} * ${modelCostCte.costPerCompletionToken}
+		+ ${cte.timeTakenPerSession} * ${modelCostCte.costPerHour} / 1000 / 60 / CAST(60 AS REAL)
+	) / COUNT(*) * ${getCurrencyRate(currencies)} / ${getCurrencyRate(targetCurrencyAlias)}`;
     const stats = await db
-        .with(cte)
+        .with(cte, modelCostCte)
         .select({
         sessionsCount: sql `SUM(${cte.sessionsCount})`,
         testsCount: countDistinct(cte.testVersionId),
@@ -136,6 +158,9 @@ export const showStats = async (query) => {
         costPerSession: costPerSessionQuery.as('costPerSession'),
     })
         .from(cte)
+        .innerJoin(modelCostCte, eq(modelCostCte.modelVersionId, cte.modelVersionId))
+        .innerJoin(currencies, eq(currencies.id, modelCostCte.currencyId))
+        .innerJoin(targetCurrencyAlias, eq(targetCurrencyAlias.code, query.currency))
         // We group by model version (note: this column in the CTE is aliased, and Drizzle is confused by this so we need to ignore the TS error until they support it properly - there are no cleaner workarounds at this time)
         // @ts-ignore
         .groupBy(cte.modelVersionId)
