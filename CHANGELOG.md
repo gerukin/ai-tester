@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2025-07-15
+
+### Added
+
+- Structured objects support. It is now possible to specify structured objects with a particular schema as the output in tests.
+- Support for file references in tests, allowing the LLM to read files from the filesystem as input to the test.
+
 ## [0.10.3] - 2025-07-05
 
 ### Fixed
@@ -81,7 +88,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 🎉 Version `0.9.0` is out... with all the base features. It isn't quite yet stable or tested enough to be relied upon.
 
-[Unreleased]: https://github.com/gerukin/ai-tester/compare/v0.10.3...HEAD
+[Unreleased]: https://github.com/gerukin/ai-tester/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/gerukin/ai-tester/compare/v0.10.3...v0.11.0
 [0.10.3]: https://github.com/gerukin/ai-tester/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/gerukin/ai-tester/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/gerukin/ai-tester/compare/v0.10.0...v0.10.1
