@@ -20,7 +20,7 @@ properties:
   billedEntity:
     type: string
     description: The name of the entity being billed (generally the buyer or client - prefer the company or contact name to codes).
-  billingAddress:
+  billedEntityAddress:
     type: string
     description: The address of the entity being billed (including street address, city, state/province, postal code, and country if specifically known).
   subTotal:

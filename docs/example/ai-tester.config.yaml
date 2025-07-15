@@ -18,6 +18,7 @@ requiredTags2:
   - off_topic
   - reasoning
   - math
+  - data_extraction
 
 evaluatorsTemperature: 0.5
 evaluationsPerEvaluator: 2
