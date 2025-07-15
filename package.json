@@ -1,6 +1,6 @@
 {
 	"name": "ai-tester",
-	"version": "0.10.3",
+	"version": "0.11.0",
 	"type": "module",
 	"engines": {
 		"node": ">=23.6.0",
