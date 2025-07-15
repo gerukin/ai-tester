@@ -3,14 +3,21 @@
  */
 
 import { and, or, eq, ne, inArray, sql, lt, countDistinct } from 'drizzle-orm'
-import { generateText } from 'ai'
+import {
+	generateText,
+	generateObject,
+	jsonSchema,
+	type GenerateObjectResult,
+	type GenerateTextResult,
+	type ToolSet,
+} from 'ai'
 
-import { testsConfig, MAX_TEST_OUTPUT_TOKENS, MAX_WAIT_TIME } from '../config/index.js'
+import { envConfig, testsConfig, MAX_TEST_OUTPUT_TOKENS, MAX_WAIT_TIME } from '../config/index.js'
 import { db } from '../database/db.js'
 import { schema } from '../database/schema.js'
 import { askYesNo } from '../utils/menus.js'
 import { providers as llmProviders, wrapModel } from '../llms/index.js'
-import { getSectionsFromMarkdownContent, sectionsToAiMessages } from '../utils/markdown.js'
+import { getSectionsFromMarkdownContent, sectionsToAiMessages, getReferencedFiles } from '../utils/markdown.js'
 
 export const runAllTests = async () => {
 	console.log('Checking for tests to run...')
@@ -25,6 +32,7 @@ export const runAllTests = async () => {
 		providers,
 		testToSystemPromptVersionRels,
 		promptVersions,
+		structuredObjectVersions,
 	} = schema
 
 	const modelConfigsWithTemperature = testsConfig.candidates.filter(candidate => candidate.temperature !== undefined)
@@ -48,6 +56,7 @@ export const runAllTests = async () => {
 			sysPromptVersionId: promptVersions.id,
 			sysPromptContent: promptVersions.content,
 			sessionsCount: countDistinct(sessions.id),
+			structuredObjectSchema: structuredObjectVersions.schema,
 		})
 		.from(modelVersions)
 		.innerJoin(
@@ -64,6 +73,9 @@ export const runAllTests = async () => {
 
 		// always true to fetch all possible test combinations (we will filter later - cross joins aren't supported in drizzle-orm as of now)
 		.innerJoin(testVersions, and(eq(testVersions.id, testVersions.id), eq(testVersions.active, true)))
+
+		// Join the expected structured object version if needed
+		.leftJoin(structuredObjectVersions, eq(testVersions.structuredObjectVersionId, structuredObjectVersions.id))
 
 		.innerJoin(testToSystemPromptVersionRels, eq(testToSystemPromptVersionRels.testVersionId, testVersions.id))
 		.innerJoin(
@@ -174,7 +186,8 @@ export const runAllTests = async () => {
 
 		// We extract the array of messages
 		const sections = getSectionsFromMarkdownContent(test.testContent)
-		const messages = sectionsToAiMessages(sections)
+		const files = getReferencedFiles(test.testContent, envConfig.AI_TESTER_TESTS_DIR, false, 'base64')
+		const messages = sectionsToAiMessages(sections, false, files)
 
 		if (messages.length === 0) {
 			console.log(`❌ No messages found for test ${test.testVersionId}`)
@@ -185,14 +198,38 @@ export const runAllTests = async () => {
 		for (let attempt = test.sessionsCount; attempt < testsConfig.attempts; attempt++) {
 			// run the test
 			const startTime = Date.now()
-			const response = await generateText({
-				model,
-				system: test.sysPromptContent,
-				messages,
-				temperature,
-				maxTokens: MAX_TEST_OUTPUT_TOKENS,
-				abortSignal: AbortSignal.timeout(MAX_WAIT_TIME),
-			})
+
+			let response: GenerateObjectResult<unknown> | GenerateTextResult<ToolSet, never>,
+				answer: string | undefined,
+				reasoning: string | undefined
+
+			if (test.structuredObjectSchema) {
+				// If a structured object schema is present, use generateObject
+				response = await generateObject({
+					model,
+					system: test.sysPromptContent,
+					messages,
+					temperature,
+					maxTokens: MAX_TEST_OUTPUT_TOKENS,
+					abortSignal: AbortSignal.timeout(MAX_WAIT_TIME),
+					schema: jsonSchema(test.structuredObjectSchema),
+				})
+				answer = JSON.stringify(response.object)
+				reasoning = undefined // reasoning is not available for structured objects
+			} else {
+				// Otherwise, use generateText
+				response = await generateText({
+					model,
+					system: test.sysPromptContent,
+					messages,
+					temperature,
+					maxTokens: MAX_TEST_OUTPUT_TOKENS,
+					abortSignal: AbortSignal.timeout(MAX_WAIT_TIME),
+				})
+				answer = response.text.trim()
+				reasoning = response.reasoning?.trim()
+			}
+
 			const endTime = Date.now()
 
 			// add the response to the DB as a session
@@ -201,8 +238,8 @@ export const runAllTests = async () => {
 				candidateSysPromptVersionId: test.sysPromptVersionId,
 				modelVersionId: test.modelVersionId,
 				temperature,
-				reasoning: response.reasoning?.trim(),
-				answer: response.text.trim(),
+				reasoning,
+				answer,
 				completionTokens: response.usage.completionTokens,
 				cachedPromptTokensWritten:
 					(response.experimental_providerMetadata?.['anthropic']?.['cacheCreationInputTokens'] as number) ?? undefined,

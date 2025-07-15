@@ -47,16 +47,14 @@ const getPromptFromFile = async (filePath: string): Promise<Prompt> => {
 		extractFrontMatterAndTemplate(content)
 
 	// Validate config
-	ConfigValidation.parse(templateConfig)
+	const cnf = ConfigValidation.parse(templateConfig)
 
-	const prompt: Prompt = {
-		id: templateConfig.id,
+	return {
+		id: cnf.id,
 		template,
-		tags: templateConfig.tags,
-		replacements: templateConfig.replacements,
+		tags: cnf.tags,
+		replacements: cnf.replacements,
 	}
-
-	return prompt
 }
 
 /**

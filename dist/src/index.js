@@ -1,14 +1,18 @@
 import { askYesNo, selectMenu } from './utils/menus.js';
 import { testsConfig } from './config/index.js';
-import { updatePromptsInDb, updateTestsInDb, runAllTests, runAllEvaluations, showStats } from './main/index.js';
+import { updatePromptsInDb, updateTestsInDb, runAllTests, runAllEvaluations, showStats, updateStructuredObjectsInDb, } from './main/index.js';
 const exit = () => process.exit(0);
+const updateAll = async () => {
+    await updateStructuredObjectsInDb();
+    await updatePromptsInDb();
+    await updateTestsInDb();
+};
 const mainMenu = async () => {
     const runMissingStuff = async (fnc) => {
         if (!(await askYesNo('This will first update the tests & prompts DB. Do you want to continue?')))
             return;
         console.log(); // empty line
-        await updatePromptsInDb();
-        await updateTestsInDb();
+        await updateAll();
         await fnc();
         console.log(); // empty line
     };
@@ -19,11 +23,8 @@ const mainMenu = async () => {
         },
         undefined,
         {
-            name: 'Update prompts & tests in the database',
-            action: async () => {
-                await updatePromptsInDb();
-                await updateTestsInDb();
-            },
+            name: 'Update prompts, tests & structured objects in the database',
+            action: updateAll,
         },
         {
             name: 'Run missing tests',

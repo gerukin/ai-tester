@@ -30,14 +30,13 @@ const getPromptFromFile = async (filePath) => {
     const content = await fs.promises.readFile(filePath, 'utf-8');
     const { template, templateConfig } = extractFrontMatterAndTemplate(content);
     // Validate config
-    ConfigValidation.parse(templateConfig);
-    const prompt = {
-        id: templateConfig.id,
+    const cnf = ConfigValidation.parse(templateConfig);
+    return {
+        id: cnf.id,
         template,
-        tags: templateConfig.tags,
-        replacements: templateConfig.replacements,
+        tags: cnf.tags,
+        replacements: cnf.replacements,
     };
-    return prompt;
 };
 /**
  * Update the prompts in the database.

@@ -1,10 +1,21 @@
 import yaml from 'yaml';
 import z from 'zod';
+import {} from 'ai';
+import { getFileInfo } from './files.js';
+import { generateHash } from './crypto.js';
 export const TagsValidation = z.array(z.string());
-const ReplacementValueValidation = z.union([z.string(), z.number(), z.array(z.union([z.string(), z.number()]))]);
+const BaseReplacementValueValidation = z.union([
+    z.string(),
+    z.number(),
+    z.null().optional().transform(() => 'null'),
+]);
+const ReplacementValueValidation = z.union([
+    BaseReplacementValueValidation,
+    z.array(BaseReplacementValueValidation),
+]);
 export const ReplacementsValidation = z.union([
     z.record(ReplacementValueValidation),
-    z.array(z.record(ReplacementValueValidation)),
+    z.array(z.record(ReplacementValueValidation))
 ]);
 const USER_MESSAGE_MARKER = '# 👤', ASSISTANT_MESSAGE_MARKER = '# 🤖', EVALUATION_MARKER = '---';
 /**
@@ -52,6 +63,37 @@ export const getVersionsFromReplacements = (template, replacements, currentKey) 
         return versions;
     }
     return [template];
+};
+/**
+ * Get all files referenced in the markdown content.
+ *
+ * @param content The content of the markdown file
+ * @param basePath The base path to resolve the file paths against
+ * @param getHashes Whether to get the file hashes (default: false)
+ * @param encoding The encoding to use when reading the file content (default is automatic)
+ * @returns An array of file paths referenced in the markdown content
+ */
+export const getReferencedFiles = (content, basePath, getHashes = false, encoding) => {
+    const fileMap = new Map(); // To avoid duplicates
+    const regex = /`{{_file:(.*?)}}`/g;
+    let match;
+    while ((match = regex.exec(content)) !== null) {
+        const filePath = match[1].trim();
+        const { fullPath, content, fileName, extension, type } = getFileInfo(basePath, filePath, encoding);
+        if (fileMap.has(fullPath))
+            continue; // Skip if already added
+        else
+            fileMap.set(fullPath, {
+                filePath: fullPath,
+                content,
+                fileName,
+                extension,
+                type,
+                hash: getHashes ? generateHash(content) : undefined,
+            });
+    }
+    // we return an ordered array of files, sorted by path
+    return Array.from(fileMap.values()).sort((a, b) => a.filePath.localeCompare(b.filePath));
 };
 /**
  * Parse a markdown file content area (excluding front matter) and return all sections in the file.
@@ -117,13 +159,45 @@ export const sectionsToNormalizedStrings = (sections) => {
  *
  * @param sections The parsed content sections
  * @param includeSystem Whether to include system messages
+ * @param files The referenced files (optional)
  * @returns The AI messages
  */
-export const sectionsToAiMessages = (sections, includeSystem = false) => {
+export const sectionsToAiMessages = (sections, includeSystem = false, files) => {
     const messages = [];
     for (const { content, type } of sections) {
         if (type === 'user' || type === 'assistant' || (includeSystem && type === 'system')) {
-            messages.push({ content, role: type });
+            // for each message which references a file, we add a file reference
+            const fileReferences = files?.filter(file => content.includes(file.fileName));
+            if (fileReferences && fileReferences.length > 0 && type === 'user') {
+                const fileParts = [];
+                for (const file of fileReferences) {
+                    if (file.type.category === 'image') {
+                        fileParts.push({
+                            type: 'image',
+                            image: file.content,
+                        });
+                    }
+                    else {
+                        fileParts.push({
+                            type: 'file',
+                            data: file.content,
+                            mimeType: file.type.mime,
+                        });
+                    }
+                }
+                messages.push({
+                    role: type,
+                    content: [
+                        {
+                            type: 'text',
+                            text: content,
+                        },
+                        ...fileParts,
+                    ],
+                });
+            }
+            else
+                messages.push({ content, role: type });
         }
     }
     return messages;

@@ -133,6 +133,32 @@ More complex patterns are possible too:
 
 Here we have 4 versions of the prompt. The last 2 share the same answer.
 
+## Structured Response
+
+You can add a structured response schema in the relevant directory and refer to it by id in the test file.
+
+```yaml
+structuredResponseSchema: my-schema-id
+```
+
+When doing so, the LLM will be forced to return a response that matches the schema.
+
+## Including file references
+
+You can include file references in the test file. The files will be read and their content will be included in the test messages.
+
+```markdown
+<!-- In the body -->
+
+Here is the content of the file:
+
+Look at {{_file:path/relative/to/tests/dir/file.jpg}} and describe it.
+```
+
+The script will use sensible defaults for mime types based on the file extension but yours may not be supported. There is no way to override the mime type at the moment. It is passed using the LLM's native file handling capabilities, if any. Referencing files in LLMs which do not support file handling may result in an error or unexpected behavior. Use tags to filter out such tests if need be.
+
+A new test version will be created if the referenced file changes (its content or its path).
+
 ## Evaluation instructions
 
 The evaluation instructions are found at the end of the test file, after the last `---` separator. They can include placeholders for replacements as well.

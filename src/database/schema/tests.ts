@@ -3,6 +3,7 @@ import { sql, relations } from 'drizzle-orm'
 
 import { testToTagRels } from './tags.js'
 import { promptVersions } from './prompts.js'
+import { structuredObjectVersions } from './structured-objects.js'
 
 export const testVersions = sqliteTable(
 	'test_versions',
@@ -25,6 +26,12 @@ export const testVersions = sqliteTable(
 		createdAt: integer('created_at', { mode: 'timestamp' })
 			.notNull()
 			.default(sql`(strftime('%s', 'now'))`),
+
+		/** The expected structured object version for this test (optional) */
+		structuredObjectVersionId: integer('structured_object_version_id').references(() => structuredObjectVersions.id, {
+			onUpdate: 'cascade',
+			onDelete: 'set null',
+		}),
 	},
 	t => ({
 		unq: unique().on(t.hash),

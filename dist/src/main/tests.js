@@ -6,7 +6,7 @@ import { and, eq, ne, inArray, notInArray } from 'drizzle-orm';
 import z from 'zod';
 import { envConfig, SPECIAL_TAGS } from '../config/index.js';
 import { listAllMdFiles } from '../utils/files.js';
-import { extractFrontMatterAndTemplate, getVersionsFromReplacements, TagsValidation, ReplacementsValidation, getSectionsFromMarkdownContent, sectionsToNormalizedStrings, } from '../utils/markdown.js';
+import { extractFrontMatterAndTemplate, getVersionsFromReplacements, TagsValidation, ReplacementsValidation, getSectionsFromMarkdownContent, sectionsToNormalizedStrings, getReferencedFiles, } from '../utils/markdown.js';
 import { generateHash } from '../utils/crypto.js';
 import { db } from '../database/db.js';
 import { schema } from '../database/schema.js';
@@ -14,6 +14,7 @@ const ConfigValidation = z.object({
     tags: TagsValidation.optional(),
     replacements: ReplacementsValidation.optional(),
     systemPrompts: z.array(z.string()).min(1),
+    structuredResponseSchema: z.string().optional(),
 });
 const TestValidation = z.intersection(ConfigValidation, z.object({
     template: z.string(),
@@ -30,14 +31,14 @@ const getTestFromFile = async (filePath) => {
     const content = await fs.promises.readFile(filePath, 'utf-8');
     const { template, templateConfig } = extractFrontMatterAndTemplate(content);
     // Validate config
-    ConfigValidation.parse(templateConfig);
-    const test = {
+    const cnf = ConfigValidation.parse(templateConfig);
+    return {
         template,
-        tags: templateConfig.tags,
-        replacements: templateConfig.replacements,
-        systemPrompts: templateConfig.systemPrompts,
+        tags: cnf.tags,
+        replacements: cnf.replacements,
+        systemPrompts: cnf.systemPrompts,
+        structuredResponseSchema: cnf.structuredResponseSchema,
     };
-    return test;
 };
 /**
  * Update the tests in the database.
@@ -96,12 +97,35 @@ export const updateTestsInDb = async () => {
                     .join(',');
                 // split the content into pre eval and post eval instructions
                 const splitContent = sectionsToNormalizedStrings(getSectionsFromMarkdownContent(contentVersion));
+                // get all referenced files in the content
+                const referencedFiles = getReferencedFiles(contentVersion, envConfig.AI_TESTER_TESTS_DIR, true);
+                // if the test has a structuredResponseSchema, find the corresponding structured object version
+                let structuredObjectVersionId = undefined;
+                if (test.structuredResponseSchema) {
+                    const code = String(test.structuredResponseSchema);
+                    const structuredObject = await tx.query.structuredObjects.findFirst({
+                        where: (obj, { eq }) => eq(obj.code, code),
+                    });
+                    if (!structuredObject) {
+                        throw new Error(`Structured object not found for code: ${code}`);
+                    }
+                    const structuredObjectVersion = await tx.query.structuredObjectVersions.findFirst({
+                        where: (ver, { eq, and }) => and(eq(ver.structuredObjectId, structuredObject.id), eq(ver.active, true)),
+                    });
+                    if (!structuredObjectVersion) {
+                        throw new Error(`Active structured object version not found for code: ${code}`);
+                    }
+                    structuredObjectVersionId = structuredObjectVersion.id;
+                }
                 // get a hash for the test
-                const hash = generateHash(splitContent.normalizedPreEval + specialTags);
+                const hash = generateHash(splitContent.normalizedPreEval +
+                    specialTags +
+                    (structuredObjectVersionId ? `|STRUCT_ID:${structuredObjectVersionId}|` : '') +
+                    referencedFiles.map(f => f.hash).join(''));
                 _testVersionHashes.add(hash);
                 const testInstance = (await tx
                     .insert(testVersions)
-                    .values({ hash, content: splitContent.normalizedPreEval })
+                    .values({ hash, content: splitContent.normalizedPreEval, structuredObjectVersionId })
                     .onConflictDoNothing()
                     .returning())[0] ??
                     (await tx.query.testVersions.findFirst({

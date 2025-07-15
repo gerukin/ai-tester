@@ -1,16 +1,28 @@
 import yaml from 'yaml'
 import z from 'zod'
+import { type CoreMessage, type ImagePart, type FilePart } from 'ai'
+
+import { getFileInfo, type FileType } from './files.js'
+import { generateHash } from './crypto.js'
 
 export const TagsValidation = z.array(z.string())
 /** Tags for a markdown file */
 export type Tags = z.infer<typeof TagsValidation>
 
-const ReplacementValueValidation = z.union([z.string(), z.number(), z.array(z.union([z.string(), z.number()]))])
+const BaseReplacementValueValidation = z.union([
+	z.string(),
+	z.number(),
+	z.null().optional().transform(() => 'null'),
+])
+const ReplacementValueValidation = z.union([
+	BaseReplacementValueValidation,
+	z.array(BaseReplacementValueValidation),
+])
 type ReplacementValue = z.infer<typeof ReplacementValueValidation>
 
 export const ReplacementsValidation = z.union([
 	z.record(ReplacementValueValidation),
-	z.array(z.record(ReplacementValueValidation)),
+	z.array(z.record(ReplacementValueValidation))
 ])
 /**
  * Replacement values for a markdown file. An array will generate one final version per item.
@@ -23,6 +35,27 @@ export type TemplateSections = {
 	type: SectionType
 	content: string
 }[]
+
+type ReferencedFile = {
+	/** The full file path */
+	filePath: string
+
+	/** The file content */
+	content: string
+
+	/** The file name */
+	fileName: string
+
+	/** The file extension */
+	extension: string
+
+	/** The file type */
+	type: FileType
+
+	/** The file hash (optional) */
+	hash?: string
+}
+export type ReferencedFiles = ReferencedFile[]
 
 const USER_MESSAGE_MARKER = '# 👤',
 	ASSISTANT_MESSAGE_MARKER = '# 🤖',
@@ -76,6 +109,43 @@ export const getVersionsFromReplacements = (
 	}
 
 	return [template]
+}
+
+/**
+ * Get all files referenced in the markdown content.
+ *
+ * @param content The content of the markdown file
+ * @param basePath The base path to resolve the file paths against
+ * @param getHashes Whether to get the file hashes (default: false)
+ * @param encoding The encoding to use when reading the file content (default is automatic)
+ * @returns An array of file paths referenced in the markdown content
+ */
+export const getReferencedFiles = (
+	content: string,
+	basePath: string,
+	getHashes: boolean = false,
+	encoding?: BufferEncoding
+): ReferencedFiles => {
+	const fileMap = new Map<string, ReferencedFile>() // To avoid duplicates
+
+	const regex = /`{{_file:(.*?)}}`/g
+	let match
+	while ((match = regex.exec(content)) !== null) {
+		const filePath = match[1].trim()
+		const { fullPath, content, fileName, extension, type } = getFileInfo(basePath, filePath, encoding)
+		if (fileMap.has(fullPath)) continue // Skip if already added
+		else fileMap.set(fullPath, {
+			filePath: fullPath,
+			content,
+			fileName,
+			extension,
+			type,
+			hash: getHashes ? generateHash(content) : undefined,
+		})
+	}
+
+	// we return an ordered array of files, sorted by path
+	return Array.from(fileMap.values()).sort((a, b) => a.filePath.localeCompare(b.filePath))
 }
 
 /**
@@ -157,14 +227,47 @@ export const sectionsToNormalizedStrings = (sections: TemplateSections) => {
  *
  * @param sections The parsed content sections
  * @param includeSystem Whether to include system messages
+ * @param files The referenced files (optional)
  * @returns The AI messages
  */
-export const sectionsToAiMessages = (sections: TemplateSections, includeSystem: boolean = false) => {
-	const messages = []
+export const sectionsToAiMessages = (
+	sections: TemplateSections,
+	includeSystem: boolean = false,
+	files?: ReferencedFiles
+): CoreMessage[] => {
+	const messages: CoreMessage[] = []
 
 	for (const { content, type } of sections) {
 		if (type === 'user' || type === 'assistant' || (includeSystem && type === 'system')) {
-			messages.push({ content, role: type })
+			// for each message which references a file, we add a file reference
+			const fileReferences = files?.filter(file => content.includes(file.fileName))
+			if (fileReferences && fileReferences.length > 0 && type === 'user') {
+				const fileParts: (ImagePart | FilePart)[] = []
+				for (const file of fileReferences) {
+					if (file.type.category === 'image') {
+						fileParts.push({
+							type: 'image',
+							image: file.content,
+						})
+					} else {
+						fileParts.push({
+							type: 'file',
+							data: file.content,
+							mimeType: file.type.mime,
+						})
+					}
+				}
+				messages.push({
+					role: type,
+					content: [
+						{
+							type: 'text',
+							text: content,
+						},
+						...fileParts,
+					],
+				})
+			} else messages.push({ content, role: type })
 		}
 	}
 
