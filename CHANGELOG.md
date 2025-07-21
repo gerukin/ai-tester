@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2025-07-22
+
+### Added
+
+- Tool calling support for tests and evaluations. Models can now use tools and output tool calls, which are injected as responses and evaluated.
+
+### Changed
+
+- Evaluation logic now accounts for currently active candidate model configurations, allowing more flexible and targeted evaluation scenarios.
+
 ## [0.11.0] - 2025-07-15
 
 ### Added
@@ -88,7 +98,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 🎉 Version `0.9.0` is out... with all the base features. It isn't quite yet stable or tested enough to be relied upon.
 
-[Unreleased]: https://github.com/gerukin/ai-tester/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/gerukin/ai-tester/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/gerukin/ai-tester/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/gerukin/ai-tester/compare/v0.10.3...v0.11.0
 [0.10.3]: https://github.com/gerukin/ai-tester/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/gerukin/ai-tester/compare/v0.10.1...v0.10.2
