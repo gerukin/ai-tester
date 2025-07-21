@@ -4,10 +4,10 @@ tags:
   - lang_instr_en
 
   # Category
-  - tool-use
+  - tool_use
 
   # Sub category
-  - single-tool
+  - single_tool
 
 systemPrompts:
   - obedient-expert-en
