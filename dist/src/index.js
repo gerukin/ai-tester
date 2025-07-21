@@ -1,9 +1,10 @@
 import { askYesNo, selectMenu } from './utils/menus.js';
 import { testsConfig } from './config/index.js';
-import { updatePromptsInDb, updateTestsInDb, runAllTests, runAllEvaluations, showStats, updateStructuredObjectsInDb, } from './main/index.js';
+import { updatePromptsInDb, updateTestsInDb, runAllTests, runAllEvaluations, showStats, updateStructuredObjectsInDb, updateToolsInDb, } from './main/index.js';
 const exit = () => process.exit(0);
 const updateAll = async () => {
     await updateStructuredObjectsInDb();
+    await updateToolsInDb();
     await updatePromptsInDb();
     await updateTestsInDb();
 };
@@ -23,7 +24,7 @@ const mainMenu = async () => {
         },
         undefined,
         {
-            name: 'Update prompts, tests & structured objects in the database',
+            name: 'Update prompts, tests, structured objects & tools in the database',
             action: updateAll,
         },
         {

@@ -8,12 +8,14 @@ import {
 	runAllEvaluations,
 	showStats,
 	updateStructuredObjectsInDb,
+	updateToolsInDb,
 } from './main/index.js'
 
 const exit = () => process.exit(0)
 
 const updateAll = async () => {
 	await updateStructuredObjectsInDb()
+	await updateToolsInDb()
 	await updatePromptsInDb()
 	await updateTestsInDb()
 }
@@ -37,7 +39,7 @@ const mainMenu = async () => {
 		},
 		undefined,
 		{
-			name: 'Update prompts, tests & structured objects in the database',
+			name: 'Update prompts, tests, structured objects & tools in the database',
 			action: updateAll,
 		},
 		{

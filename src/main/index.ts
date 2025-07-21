@@ -4,5 +4,14 @@ import { runAllTests } from './sessions.js'
 import { runAllEvaluations } from './evaluations.js'
 import { showStats } from './stats.js'
 import { updateStructuredObjectsInDb } from './structured-objects.js'
+import { updateToolsInDb } from './tools.js'
 
-export { updatePromptsInDb, updateTestsInDb, runAllTests, runAllEvaluations, showStats, updateStructuredObjectsInDb }
+export {
+	updatePromptsInDb,
+	updateTestsInDb,
+	runAllTests,
+	runAllEvaluations,
+	showStats,
+	updateStructuredObjectsInDb,
+	updateToolsInDb,
+}

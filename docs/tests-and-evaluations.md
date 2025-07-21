@@ -143,6 +143,9 @@ structuredResponseSchema: my-schema-id
 
 When doing so, the LLM will be forced to return a response that matches the schema.
 
+> [!NOTE]
+> The `structuredResponseSchema` field is not compatible with all LLMs (the LLM must officially support structured responses), and cannot be used at the same time as the `availableTools` field.
+
 ## Including file references
 
 You can include file references in the test file. The files will be read and their content will be included in the test messages.
@@ -158,6 +161,41 @@ Look at {{_file:path/relative/to/tests/dir/file.jpg}} and describe it.
 The script will use sensible defaults for mime types based on the file extension but yours may not be supported. There is no way to override the mime type at the moment. It is passed using the LLM's native file handling capabilities, if any. Referencing files in LLMs which do not support file handling may result in an error or unexpected behavior. Use tags to filter out such tests if need be.
 
 A new test version will be created if the referenced file changes (its content or its path).
+
+## Tools
+
+You can specify which tools are available to the LLM for a given test by listing them in the YAML frontmatter using the `availableTools` field. Each tool must be defined in the tool definitions directory.
+
+Example:
+
+```yaml
+availableTools:
+  - city-weather
+  - my-custom-tool
+```
+
+When you specify tools in the test frontmatter, the LLM will be able to call these tools during the test. The tool definitions (parameters, description, etc.) are loaded from the tool definitions directory and versioned. If you change a tool definition, a new tool version will be created and linked to new test versions as appropriate.
+
+The LLM will be given a choice to call any or several of the tools listed in the `availableTools` field, or even directly reply to the user. The tool choice is `automatic` and decided purely by the LLM. The calls themselves (or the response) are then returned as part of the response to evaluate for the test.
+
+> [!IMPORTANT]
+> A new test version will be created if the set of available tools or their versions changes.
+
+You can reference tool parameters in the test body or evaluation instructions using the same replacement syntax as for other variables.
+
+In the evaluation instructions, you can indicate what tool calls (if any) were expected from the LLM, and even specify the expected parameters for those calls. Ex::
+
+```markdown
+The AI candidate was expected to call the `cityWeather` tool with the following parameters:
+
+- `cityName`: `{{cityName}}`
+- `countryCode`: `{{countryCode}}`
+```
+
+If you want to test tool use, make sure to include the tool in `availableTools` and describe the expected tool call in the evaluation instructions.
+
+> [!NOTE]
+> The `availableTools` field is not compatible with all LLMs (the LLM must officially support tool calling), and cannot be used at the same time as the `structuredResponseSchema` field.
 
 ## Evaluation instructions
 

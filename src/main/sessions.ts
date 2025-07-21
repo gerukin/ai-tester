@@ -18,6 +18,8 @@ import { schema } from '../database/schema.js'
 import { askYesNo } from '../utils/menus.js'
 import { providers as llmProviders, wrapModel } from '../llms/index.js'
 import { getSectionsFromMarkdownContent, sectionsToAiMessages, getReferencedFiles } from '../utils/markdown.js'
+import { ToolDefinition } from './tools.js'
+import type { z } from 'zod'
 
 export const runAllTests = async () => {
 	console.log('Checking for tests to run...')
@@ -33,6 +35,8 @@ export const runAllTests = async () => {
 		testToSystemPromptVersionRels,
 		promptVersions,
 		structuredObjectVersions,
+		toolVersions,
+		testToToolVersionRels,
 	} = schema
 
 	const modelConfigsWithTemperature = testsConfig.candidates.filter(candidate => candidate.temperature !== undefined)
@@ -57,6 +61,17 @@ export const runAllTests = async () => {
 			sysPromptContent: promptVersions.content,
 			sessionsCount: countDistinct(sessions.id),
 			structuredObjectSchema: structuredObjectVersions.schema,
+			toolVersionSchemas: sql<null | string>`(
+				SELECT
+					CASE
+						WHEN count(*) = 0 THEN NULL
+						ELSE json_group_array(${toolVersions.schema})
+					END
+				FROM ${toolVersions}
+				INNER JOIN ${testToToolVersionRels}
+					ON ${eq(testToToolVersionRels.toolVersionId, toolVersions.id)}
+					AND ${eq(testToToolVersionRels.testVersionId, testVersions.id)}
+			)`,
 		})
 		.from(modelVersions)
 		.innerJoin(
@@ -76,6 +91,10 @@ export const runAllTests = async () => {
 
 		// Join the expected structured object version if needed
 		.leftJoin(structuredObjectVersions, eq(testVersions.structuredObjectVersionId, structuredObjectVersions.id))
+
+		// Join tool version relationships and tool versions
+		.leftJoin(testToToolVersionRels, eq(testToToolVersionRels.testVersionId, testVersions.id))
+		.leftJoin(toolVersions, eq(toolVersions.id, testToToolVersionRels.toolVersionId))
 
 		.innerJoin(testToSystemPromptVersionRels, eq(testToSystemPromptVersionRels.testVersionId, testVersions.id))
 		.innerJoin(
@@ -218,15 +237,40 @@ export const runAllTests = async () => {
 				reasoning = undefined // reasoning is not available for structured objects
 			} else {
 				// Otherwise, use generateText
+
+				// First check if we have tools we can use
+				let toolSet: ToolSet | undefined = undefined
+				if (test.toolVersionSchemas) {
+					const topArray = JSON.parse(test.toolVersionSchemas) as string[]
+					for (const toolVersionSchema of topArray ?? []) {
+						if (!toolSet) toolSet = {}
+						const toolVersion = JSON.parse(toolVersionSchema) as z.infer<typeof ToolDefinition>
+
+						// Add subsequent tool version schemas to the existing toolSet
+						toolSet[toolVersion.name] = {
+							parameters: jsonSchema(toolVersion.parameters),
+							description: toolVersion.description,
+						}
+					}
+				}
+
 				response = await generateText({
 					model,
 					system: test.sysPromptContent,
 					messages,
 					temperature,
+					tools: toolSet,
 					maxTokens: MAX_TEST_OUTPUT_TOKENS,
 					abortSignal: AbortSignal.timeout(MAX_WAIT_TIME),
 				})
-				answer = response.text.trim()
+
+				// if we called a tool, we need to extract the call(s) as the answer
+				if (response.toolCalls?.length > 0) {
+					answer = JSON.stringify(response.toolCalls.map(call => ({ name: call.toolName, arguments: call.args })))
+				} else {
+					answer = response.text.trim()
+				}
+
 				reasoning = response.reasoning?.trim()
 			}
 

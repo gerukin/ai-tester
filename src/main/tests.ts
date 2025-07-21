@@ -26,7 +26,18 @@ const ConfigValidation = z.object({
 	replacements: ReplacementsValidation.optional(),
 	systemPrompts: z.array(z.string()).min(1),
 	structuredResponseSchema: z.string().optional(),
-})
+	availableTools: z.array(z.string()).optional(),
+}).refine(
+	data => {
+		const hasSchema = !!data.structuredResponseSchema
+		const hasTools = !!data.availableTools && data.availableTools.length > 0
+		return !(hasSchema && hasTools)
+	},
+	{
+		message: 'Only one of structuredResponseSchema or availableTools can be specified, not both.',
+		path: ['structuredResponseSchema', 'availableTools'],
+	}
+)
 type Config = z.infer<typeof ConfigValidation>
 const TestValidation = z.intersection(
 	ConfigValidation,
@@ -58,6 +69,7 @@ const getTestFromFile = async (filePath: string): Promise<Test> => {
 		replacements: cnf.replacements,
 		systemPrompts: cnf.systemPrompts,
 		structuredResponseSchema: cnf.structuredResponseSchema,
+		availableTools: cnf.availableTools,
 	}
 }
 
@@ -123,6 +135,7 @@ export const updateTestsInDb = async () => {
 		testToSystemPromptVersionRels,
 		testEvaluationInstructionsVersions,
 		testToEvaluationInstructionsRels,
+		testToToolVersionRels,
 	} = schema
 
 	await db.transaction(async tx => {
@@ -161,11 +174,34 @@ export const updateTestsInDb = async () => {
 					structuredObjectVersionId = structuredObjectVersion.id
 				}
 
+				// if the test has available tools, we need to get the tool versions
+				const referencedToolVersionIds: number[] = []
+				if (test.availableTools) {
+					for (const toolCode of test.availableTools) {
+						const toolInstance = await tx.query.tools.findFirst({
+							where: (tools, { eq }) => eq(tools.code, toolCode),
+							with: {
+								versions: {
+									where: (version, { eq }) => eq(version.active, true),
+								},
+							},
+						})
+						if (!toolInstance) {
+							throw new Error(`Tool not found: ${toolCode}`)
+						}
+						if (toolInstance.versions.length === 0) {
+							throw new Error(`No active version found for tool: ${toolCode}`)
+						}
+						referencedToolVersionIds.push(toolInstance.versions[0].id)
+					}
+				}
+
 				// get a hash for the test
 				const hash = generateHash(
 					splitContent.normalizedPreEval +
 						specialTags +
 						(structuredObjectVersionId ? `|STRUCT_ID:${structuredObjectVersionId}|` : '') +
+						(referencedToolVersionIds.length > 0 ? `|TOOLS:${referencedToolVersionIds.join(',')}|` : '') +
 						referencedFiles.map(f => f.hash).join('')
 				)
 				_testVersionHashes.add(hash)
@@ -276,6 +312,25 @@ export const updateTestsInDb = async () => {
 						sysPromptVersionInstances.push(sysPromptVersionInstance)
 					}
 				}
+
+				// Link tool versions to this test version
+				if (referencedToolVersionIds.length > 0) {
+					for (const toolVersionId of referencedToolVersionIds) {
+						await tx
+							.insert(testToToolVersionRels)
+							.values({ testVersionId: testInstance.id, toolVersionId })
+							.onConflictDoNothing()
+					}
+				}
+				// Remove tool version relationships that are no longer associated with this test version
+				await tx
+					.delete(testToToolVersionRels)
+					.where(
+						and(
+							eq(testToToolVersionRels.testVersionId, testInstance.id),
+							notInArray(testToToolVersionRels.toolVersionId, referencedToolVersionIds)
+						)
+					)
 
 				// remove system prompts that are no longer associated with the test
 				// for already run sessions, this will not remove the association as it is kept in the sessions table

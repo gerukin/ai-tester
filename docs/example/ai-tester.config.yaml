@@ -19,6 +19,7 @@ requiredTags2:
   - reasoning
   - math
   - data_extraction
+  - tool-use
 
 evaluatorsTemperature: 0.5
 evaluationsPerEvaluator: 2

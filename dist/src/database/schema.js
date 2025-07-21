@@ -8,6 +8,7 @@ import * as tags from './schema/tags.js';
 import * as tests from './schema/tests.js';
 import * as costs from './schema/costs.js';
 import * as structuredObjects from './schema/structured-objects.js';
+import * as tools from './schema/tools.js';
 // import * as views from './schema/views.js'
 export const schema = {
     ...models,
@@ -18,6 +19,7 @@ export const schema = {
     ...tests,
     ...costs,
     ...structuredObjects,
+    ...tools,
     // TODO: views do not seem to be handled by DrizzleKit - will be handled manually or here in the future
     // ...views,
 };

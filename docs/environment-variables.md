@@ -10,6 +10,7 @@ The following environment variables are used by the AI Tester...
 - `AI_TESTER_TESTS_DIR`: Path to the tests directory (relative to the root of the project). Example: `.local/data/tests`.
 - `AI_TESTER_PROMPTS_DIR`: Path to the prompts directory (relative to the root of the project). Example: `.local/data/prompts`.
 - `AI_TESTER_STRUCTURED_SCHEMAS_DIR`: Path to the structured schemas directory (relative to the root of the project). Example: `.local/data/structured-schemas`.
+- `AI_TESTER_TOOL_DEFINITIONS_DIR`: Path to the tool definitions directory (relative to the root of the project). Example: `.local/data/tool-definitions`.
 - `AI_TESTER_CONFIG_PATH`: Path to the configuration file (relative to the root of the project). Example: `.local/ai-tester.config.yaml`.
 
 > [!IMPORTANT]
