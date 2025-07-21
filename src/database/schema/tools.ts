@@ -40,9 +40,9 @@ export const toolVersions = sqliteTable(
 			.notNull()
 			.default(sql`(strftime('%s', 'now'))`),
 	},
-	t => ({
-		unq: unique().on(t.toolId, t.hash),
-	})
+	t => [
+		unique().on(t.toolId, t.hash),
+	]
 )
 
 export const toolVersionRelations = relations(toolVersions, ({ one, many }) => ({
@@ -76,9 +76,9 @@ export const testToToolVersionRels = sqliteTable(
 				onDelete: 'cascade',
 			}),
 	},
-	t => ({
-		pk: primaryKey({ columns: [t.testVersionId, t.toolVersionId] }),
-	})
+	t => [
+		primaryKey({ columns: [t.testVersionId, t.toolVersionId] }),
+	]
 )
 
 export const testToolVersionRelations = relations(testToToolVersionRels, ({ one }) => ({

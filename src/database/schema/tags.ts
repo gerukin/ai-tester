@@ -31,9 +31,9 @@ export const testToTagRels = sqliteTable(
 				onDelete: 'cascade',
 			}),
 	},
-	t => ({
-		pk: primaryKey({ columns: [t.tagId, t.testVersionId] }),
-	})
+	t => [
+		primaryKey({ columns: [t.tagId, t.testVersionId] }),
+	]
 )
 export const tagsToTestRelations = relations(testToTagRels, ({ one }) => ({
 	/** The tag related to this test */
@@ -59,9 +59,9 @@ export const promptToTagRels = sqliteTable(
 			.notNull()
 			.references(() => prompts.id, { onUpdate: 'cascade', onDelete: 'cascade' }),
 	},
-	t => ({
-		pk: primaryKey({ columns: [t.tagId, t.promptId] }),
-	})
+	t => [
+		primaryKey({ columns: [t.tagId, t.promptId] }),
+	]
 )
 export const tagsToPromptRelations = relations(promptToTagRels, ({ one }) => ({
 	/** The tag related to this prompt */

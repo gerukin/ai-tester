@@ -33,9 +33,9 @@ export const testVersions = sqliteTable(
 			onDelete: 'set null',
 		}),
 	},
-	t => ({
-		unq: unique().on(t.hash),
-	})
+	t => [
+		unique().on(t.hash),
+	]
 )
 export const testRelations = relations(testVersions, ({ many }) => ({
 	/** The tags related to this test */
@@ -64,9 +64,9 @@ export const testToSystemPromptVersionRels = sqliteTable(
 				onDelete: 'cascade',
 			}),
 	},
-	t => ({
-		pk: primaryKey({ columns: [t.testVersionId, t.systemPromptVersionId] }),
-	})
+	t => [
+		primaryKey({ columns: [t.testVersionId, t.systemPromptVersionId] }),
+	]
 )
 export const testSystemPromptVersionRelations = relations(testToSystemPromptVersionRels, ({ one }) => ({
 	/** The test version related to this system prompt version */
@@ -105,9 +105,9 @@ export const testEvaluationInstructionsVersions = sqliteTable(
 			.notNull()
 			.default(sql`(strftime('%s', 'now'))`),
 	},
-	t => ({
-		unq: unique().on(t.hash),
-	})
+	t => [
+		unique().on(t.hash),
+	]
 )
 
 export const testToEvaluationInstructionsRels = sqliteTable(
@@ -129,9 +129,9 @@ export const testToEvaluationInstructionsRels = sqliteTable(
 				onDelete: 'cascade',
 			}),
 	},
-	t => ({
-		pk: primaryKey({ columns: [t.testVersionId, t.evaluationInstructionsVersionId] }),
-	})
+	t => [
+		primaryKey({ columns: [t.testVersionId, t.evaluationInstructionsVersionId] }),
+	]
 )
 
 export const testEvaluationInstructionsRelations = relations(testToEvaluationInstructionsRels, ({ one }) => ({

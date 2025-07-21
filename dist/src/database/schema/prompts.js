@@ -31,9 +31,9 @@ export const promptVersions = sqliteTable('prompt_versions', {
     createdAt: integer('created_at', { mode: 'timestamp' })
         .notNull()
         .default(sql `(strftime('%s', 'now'))`),
-}, t => ({
-    unq: unique().on(t.promptId, t.hash),
-}));
+}, t => [
+    unique().on(t.promptId, t.hash),
+]);
 export const promptVersionRelations = relations(promptVersions, ({ one }) => ({
     /** The prompt this version belongs to */
     prompt: one(prompts, {

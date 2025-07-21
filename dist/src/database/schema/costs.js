@@ -22,9 +22,9 @@ export const currencyRates = sqliteTable('currency_rates', {
     validFrom: integer('valid_from', { mode: 'timestamp' })
         .notNull()
         .default(sql `(strftime('%s', 'now'))`),
-}, t => ({
-    unq: unique().on(t.currencyId, t.validFrom),
-}));
+}, t => [
+    unique().on(t.currencyId, t.validFrom),
+]);
 export const currencyRateRelations = relations(currencyRates, ({ one, many }) => ({
     /** The currency */
     currency: one(currencies),
@@ -49,9 +49,9 @@ export const modelCosts = sqliteTable('model_costs', {
     validFrom: integer('valid_from', { mode: 'timestamp' })
         .notNull()
         .default(sql `(strftime('%s', 'now'))`),
-}, t => ({
-    unq: unique().on(t.modelVersionId, t.validFrom),
-}));
+}, t => [
+    unique().on(t.modelVersionId, t.validFrom),
+]);
 export const modelCostRelations = relations(modelCosts, ({ one }) => ({
     /** The model version */
     modelVersion: one(modelVersions),

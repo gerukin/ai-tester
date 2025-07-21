@@ -63,15 +63,15 @@ export const sessions = sqliteTable(
 			.notNull()
 			.default(sql`(strftime('%s', 'now'))`),
 	},
-	t => ({
-		unq: index('combined_session_idx').on(
+	t => [
+		index('combined_session_idx').on(
 			t.modelVersionId,
 			t.testVersionId,
 			t.candidateSysPromptVersionId,
 			t.temperature
 		),
-		testIdIdx: index('test_id_idx').on(t.testVersionId),
-	})
+		index('test_id_idx').on(t.testVersionId),
+	]
 )
 export const sessionRelations = relations(sessions, ({ one }) => ({
 	/** The prompt version used in this session */
@@ -159,10 +159,10 @@ export const sessionEvaluations = sqliteTable(
 			.notNull()
 			.default(sql`(strftime('%s', 'now'))`),
 	},
-	t => ({
-		unq: index('combined_evaluation_idx').on(t.modelVersionId, t.sessionId, t.evaluationPromptVersionId, t.temperature),
-		sessionIdIdx: index('session_id_idx').on(t.sessionId),
-	})
+	t => [
+		index('combined_evaluation_idx').on(t.modelVersionId, t.sessionId, t.evaluationPromptVersionId, t.temperature),
+		index('session_id_idx').on(t.sessionId),
+	]
 )
 
 export const sessionEvaluationRelations = relations(sessionEvaluations, ({ one }) => ({

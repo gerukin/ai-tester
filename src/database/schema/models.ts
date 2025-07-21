@@ -38,9 +38,9 @@ export const modelVersions = sqliteTable(
 			.notNull()
 			.default(sql`(strftime('%s', 'now'))`),
 	},
-	t => ({
-		unq: unique().on(t.providerId, t.providerModelCode, t.extraIdentifier),
-	})
+	t => [
+		unique().on(t.providerId, t.providerModelCode, t.extraIdentifier),
+	]
 )
 export const modelVersionRelations = relations(modelVersions, ({ one }) => ({
 	/** The model this version belongs to */

@@ -27,9 +27,9 @@ export const toolVersions = sqliteTable('tool_versions', {
     createdAt: integer('created_at', { mode: 'timestamp' })
         .notNull()
         .default(sql `(strftime('%s', 'now'))`),
-}, t => ({
-    unq: unique().on(t.toolId, t.hash),
-}));
+}, t => [
+    unique().on(t.toolId, t.hash),
+]);
 export const toolVersionRelations = relations(toolVersions, ({ one, many }) => ({
     /** The tool this version belongs to */
     tool: one(tools, {
@@ -55,9 +55,9 @@ export const testToToolVersionRels = sqliteTable('test_to_tool_version_rels', {
         onUpdate: 'cascade',
         onDelete: 'cascade',
     }),
-}, t => ({
-    pk: primaryKey({ columns: [t.testVersionId, t.toolVersionId] }),
-}));
+}, t => [
+    primaryKey({ columns: [t.testVersionId, t.toolVersionId] }),
+]);
 export const testToolVersionRelations = relations(testToToolVersionRels, ({ one }) => ({
     /** The test version related to this tool version */
     test: one(testVersions, {

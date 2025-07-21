@@ -46,10 +46,10 @@ export const sessions = sqliteTable('sessions', {
     createdAt: integer('created_at', { mode: 'timestamp' })
         .notNull()
         .default(sql `(strftime('%s', 'now'))`),
-}, t => ({
-    unq: index('combined_session_idx').on(t.modelVersionId, t.testVersionId, t.candidateSysPromptVersionId, t.temperature),
-    testIdIdx: index('test_id_idx').on(t.testVersionId),
-}));
+}, t => [
+    index('combined_session_idx').on(t.modelVersionId, t.testVersionId, t.candidateSysPromptVersionId, t.temperature),
+    index('test_id_idx').on(t.testVersionId),
+]);
 export const sessionRelations = relations(sessions, ({ one }) => ({
     /** The prompt version used in this session */
     candidateSysPromptVersion: one(promptVersions, {
@@ -116,10 +116,10 @@ export const sessionEvaluations = sqliteTable('session_evaluations', {
     createdAt: integer('created_at', { mode: 'timestamp' })
         .notNull()
         .default(sql `(strftime('%s', 'now'))`),
-}, t => ({
-    unq: index('combined_evaluation_idx').on(t.modelVersionId, t.sessionId, t.evaluationPromptVersionId, t.temperature),
-    sessionIdIdx: index('session_id_idx').on(t.sessionId),
-}));
+}, t => [
+    index('combined_evaluation_idx').on(t.modelVersionId, t.sessionId, t.evaluationPromptVersionId, t.temperature),
+    index('session_id_idx').on(t.sessionId),
+]);
 export const sessionEvaluationRelations = relations(sessionEvaluations, ({ one }) => ({
     /** The session this evaluation is for */
     session: one(sessions, {

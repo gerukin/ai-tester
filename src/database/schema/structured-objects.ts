@@ -37,9 +37,9 @@ export const structuredObjectVersions = sqliteTable(
 			.notNull()
 			.default(sql`(strftime('%s', 'now'))`),
 	},
-	t => ({
-		unq: unique().on(t.structuredObjectId, t.hash),
-	})
+	t => [
+		unique().on(t.structuredObjectId, t.hash),
+	]
 )
 export const structuredObjectVersionRelations = relations(structuredObjectVersions, ({ one }) => ({
 	/** The structured object this version belongs to */
