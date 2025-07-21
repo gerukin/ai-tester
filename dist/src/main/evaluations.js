@@ -28,6 +28,11 @@ export const runAllEvaluations = async () => {
     const modelsWithTemperatures = new Map(modelConfigsWithTemperature.map(({ provider, model, temperature }) => [`${provider}:${model}`, temperature]));
     const modelConfigsWithTags = testsConfig.evaluators.filter(candidate => candidate.requiredTags !== undefined && candidate.requiredTags.length > 0);
     const modelConfigsWithProhibitedTags = testsConfig.evaluators.filter(candidate => candidate.prohibitedTags !== undefined && candidate.prohibitedTags.length > 0);
+    const candidateModelConfigsWithTemperature = testsConfig.candidates.filter(candidate => candidate.temperature !== undefined);
+    const candidateModelConfigsWithTags = testsConfig.candidates.filter(candidate => candidate.requiredTags !== undefined && candidate.requiredTags.length > 0);
+    const candidateModelConfigsWithProhibitedTags = testsConfig.candidates.filter(candidate => candidate.prohibitedTags !== undefined && candidate.prohibitedTags.length > 0);
+    const candidateModelVersionAlias = aliasedTable(modelVersions, 'candidate_model_version_alias');
+    const candidateProviderAlias = aliasedTable(providers, 'candidate_provider_alias');
     const testSysPromptAlias = aliasedTable(promptVersions, 'test_sys_prompt_alias');
     const missingEvaluations = await db
         .select({
@@ -47,7 +52,17 @@ export const runAllEvaluations = async () => {
         .from(modelVersions)
         .innerJoin(providers, and(eq(providers.id, modelVersions.providerId), or(...testsConfig.evaluators.map(({ provider, model }) => and(eq(providers.code, provider), eq(modelVersions.providerModelCode, model))))))
         // always true to fetch all possible session combinations (we will filter later - cross joins aren't supported in drizzle-orm as of now)
-        .innerJoin(sessions, eq(sessions.id, sessions.id))
+        .innerJoin(sessions, and(eq(sessions.id, sessions.id), candidateModelConfigsWithTemperature.length > 0
+        ? sql `${sessions.temperature} = CASE
+							${sql.join(candidateModelConfigsWithTemperature.map(candidate => sql `WHEN
+											${eq(candidateModelVersionAlias.providerModelCode, candidate.model)}
+											AND ${eq(candidateProviderAlias.code, candidate.provider)}
+											THEN ${candidate.temperature}`))}
+							ELSE ${testsConfig.candidatesTemperature}
+						END`
+        : eq(sessions.temperature, testsConfig.candidatesTemperature)))
+        .innerJoin(candidateModelVersionAlias, eq(candidateModelVersionAlias.id, sessions.modelVersionId))
+        .innerJoin(candidateProviderAlias, and(eq(candidateProviderAlias.id, candidateModelVersionAlias.providerId), or(...testsConfig.candidates.map(({ provider, model }) => and(eq(candidateProviderAlias.code, provider), eq(candidateModelVersionAlias.providerModelCode, model))))))
         .innerJoin(prompts, eq(prompts.code, '_evaluator_default'))
         .innerJoin(promptVersions, and(eq(promptVersions.promptId, prompts.id), eq(promptVersions.active, true)))
         // we add the evaluation prompt version to the query
@@ -91,7 +106,15 @@ export const runAllEvaluations = async () => {
             : []),
         // ensure we don't have any prohibited tags for each model
         ...(modelConfigsWithProhibitedTags.length > 0
-            ? modelConfigsWithProhibitedTags.map(evaluator => sql `sum(CASE WHEN ${and(eq(modelVersions.providerModelCode, evaluator.model), eq(providers.code, evaluator.provider), inArray(tags.name, evaluator.prohibitedTags))} THEN 1 ELSE 0 END) > 0`)
+            ? modelConfigsWithProhibitedTags.map(evaluator => sql `sum(CASE WHEN ${and(eq(modelVersions.providerModelCode, evaluator.model), eq(providers.code, evaluator.provider), inArray(tags.name, evaluator.prohibitedTags))} THEN 1 ELSE 0 END) = 0`)
+            : []),
+        // ensure we have all required tags for each candidate model
+        ...(candidateModelConfigsWithTags.length > 0
+            ? candidateModelConfigsWithTags.map(candidate => sql `sum(CASE WHEN ${or(ne(candidateModelVersionAlias.providerModelCode, candidate.model), ne(candidateProviderAlias.code, candidate.provider), inArray(tags.name, candidate.requiredTags))} THEN 1 ELSE 0 END) > 0`)
+            : []),
+        // ensure we don't have any prohibited tags for each candidate model
+        ...(candidateModelConfigsWithProhibitedTags.length > 0
+            ? candidateModelConfigsWithProhibitedTags.map(candidate => sql `sum(CASE WHEN ${and(eq(candidateModelVersionAlias.providerModelCode, candidate.model), eq(candidateProviderAlias.code, candidate.provider), inArray(tags.name, candidate.prohibitedTags))} THEN 1 ELSE 0 END) = 0`)
             : []),
     ]))
         // ordering by model id is important as Ollama and other local models have some initial load time to consider
