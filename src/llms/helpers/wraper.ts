@@ -17,7 +17,7 @@ const providerModelRules: Record<
 > = {
 	'ollama.chat': [
 		{
-			matchRegex: /^deepseek-r1.*/, // ex: deepseek-r1:14b-qwen-distill-q4_K_M
+			matchRegex: /.*/, // matches all models (no need to specifically exclude non thinking models)
 			middlewares: [extractReasoningMiddleware({ tagName: 'think' })],
 		},
 	],
