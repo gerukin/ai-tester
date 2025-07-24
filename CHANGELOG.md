@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.1] - 2025-07-25
+
+### Fixed
+
+- Catch reasoning traces for all Ollama models by default. It is assumed that the standard `think` tag is generally used (an override can be added in the future for specific models).
+
 ## [0.12.0] - 2025-07-22
 
 ### Added
@@ -98,7 +104,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 🎉 Version `0.9.0` is out... with all the base features. It isn't quite yet stable or tested enough to be relied upon.
 
-[Unreleased]: https://github.com/gerukin/ai-tester/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/gerukin/ai-tester/compare/v0.12.1...HEAD
+[0.12.1]: https://github.com/gerukin/ai-tester/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/gerukin/ai-tester/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/gerukin/ai-tester/compare/v0.10.3...v0.11.0
 [0.10.3]: https://github.com/gerukin/ai-tester/compare/v0.10.2...v0.10.3
