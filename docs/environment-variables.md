@@ -12,9 +12,10 @@ The following environment variables are used by the AI Tester...
 - `AI_TESTER_STRUCTURED_SCHEMAS_DIR`: Path to the structured schemas directory (relative to the root of the project). Example: `.local/data/structured-schemas`.
 - `AI_TESTER_TOOL_DEFINITIONS_DIR`: Path to the tool definitions directory (relative to the root of the project). Example: `.local/data/tool-definitions`.
 - `AI_TESTER_CONFIG_PATH`: Path to the configuration file (relative to the root of the project). Example: `.local/ai-tester.config.yaml`.
+- `MAX_WAIT_TIME`: The maximum time (in milliseconds) the model can take to answer a test or an evaluation. Default: `120000` (120 seconds).
 
 > [!IMPORTANT]
-> All of them are required and have no default values.
+> All variables above except `MAX_WAIT_TIME` are required and have no default values.
 
 ## Model providers
 

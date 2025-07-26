@@ -6,7 +6,7 @@ import { and, or, eq, ne, inArray, sql, lt, countDistinct, aliasedTable } from '
 import { generateObject, TypeValidationError, type GenerateObjectResult } from 'ai'
 import z from 'zod'
 
-import { testsConfig, MAX_EVALUATION_OUTPUT_TOKENS, MAX_WAIT_TIME } from '../config/index.js'
+import { testsConfig, MAX_EVALUATION_OUTPUT_TOKENS, envConfig } from '../config/index.js'
 import { db } from '../database/db.js'
 import { schema } from '../database/schema.js'
 import { askYesNo } from '../utils/menus.js'
@@ -320,7 +320,7 @@ export const runAllEvaluations = async () => {
 					messages,
 					temperature,
 					maxTokens: MAX_EVALUATION_OUTPUT_TOKENS,
-					abortSignal: AbortSignal.timeout(MAX_WAIT_TIME),
+					abortSignal: AbortSignal.timeout(envConfig.MAX_WAIT_TIME),
 				})
 			} catch (err) {
 				if (err instanceof TypeValidationError) {

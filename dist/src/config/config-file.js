@@ -1,10 +1,11 @@
 import fs from 'node:fs';
 import yaml from 'yaml';
 import { z } from 'zod';
-import { CONFIG_FILE_PATH, DEFAULT_TEMPERATURE, DEFAULT_ATTEMPTS, DEFAULT_PROHIBITED_TAGS, DEFAULT_EVALUATIONS, } from './constants.js';
+import { DEFAULT_TEMPERATURE, DEFAULT_ATTEMPTS, DEFAULT_PROHIBITED_TAGS, DEFAULT_EVALUATIONS } from './constants.js';
+import { envConfig } from './environment.js';
 // if the config file is not found, we throw an error
-if (!fs.existsSync(CONFIG_FILE_PATH)) {
-    throw new Error(`Config file not found at ${CONFIG_FILE_PATH}`);
+if (!fs.existsSync(envConfig.AI_TESTER_CONFIG_PATH)) {
+    throw new Error(`Config file not found at ${envConfig.AI_TESTER_CONFIG_PATH}`);
 }
 const temperature = z.number().min(0).max(1).default(DEFAULT_TEMPERATURE);
 const requiredTags = z.array(z.string()).default([]);
@@ -71,4 +72,4 @@ export const testsConfig = z
     /** Preset queries for analysis of the test DB */
     analysisQueries: z.array(analysisQuery).optional(),
 })
-    .parse(yaml.parse(fs.readFileSync(CONFIG_FILE_PATH, 'utf-8')));
+    .parse(yaml.parse(fs.readFileSync(envConfig.AI_TESTER_CONFIG_PATH, 'utf-8')));

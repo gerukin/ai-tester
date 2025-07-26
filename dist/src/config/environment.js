@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import { z } from 'zod';
+import { DEFAULT_MAX_WAIT_TIME, DEFAULT_CONFIG_FILE_PATH } from './constants.js';
 dotenv.config({ path: '.env.local' });
 dotenv.config();
 export const envConfig = z
@@ -10,7 +11,7 @@ export const envConfig = z
     AI_TESTER_PROMPTS_DIR: z.string().min(1),
     AI_TESTER_STRUCTURED_SCHEMAS_DIR: z.string().min(1).optional(),
     AI_TESTER_TOOL_DEFINITIONS_DIR: z.string().min(1).optional(),
-    AI_TESTER_CONFIG_PATH: z.string().min(1).optional(),
+    AI_TESTER_CONFIG_PATH: z.string().min(1).optional().default(DEFAULT_CONFIG_FILE_PATH),
     // Vertex AI config
     GOOGLE_APPLICATION_CREDENTIALS: z.string().min(1).optional(),
     GOOGLE_VERTEX_AI_REGION: z.string().min(1).optional(),
@@ -19,6 +20,8 @@ export const envConfig = z
     OPENAI_API_KEY: z.string().min(10).optional(),
     // Perplexity config
     PERPLEXITY_API_KEY: z.string().min(10).optional(),
+    // Max wait time config
+    MAX_WAIT_TIME: z.coerce.number().optional().default(DEFAULT_MAX_WAIT_TIME),
 })
     .parse({
     AI_TESTER_OLLAMA_BASE_URL: process.env['AI_TESTER_OLLAMA_BASE_URL'],
@@ -36,4 +39,6 @@ export const envConfig = z
     OPENAI_API_KEY: process.env['OPENAI_API_KEY'],
     // Perplexity config
     PERPLEXITY_API_KEY: process.env['PERPLEXITY_API_KEY'],
+    // Max wait time config
+    MAX_WAIT_TIME: process.env['MAX_WAIT_TIME'],
 });

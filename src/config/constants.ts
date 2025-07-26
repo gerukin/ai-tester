@@ -1,5 +1,3 @@
-import { envConfig } from './environment.js'
-
 /**
  * Special tags that have a special meaning in the tests or prompts. Tests and prompts can have multiple special tags.
  *
@@ -40,7 +38,7 @@ export const DEFAULT_TEMPERATURE = 0.3,
 	DEFAULT_ATTEMPTS = 1,
 	DEFAULT_EVALUATIONS = 3,
 	DEFAULT_PROHIBITED_TAGS = ['skip', 'example'],
-	CONFIG_FILE_PATH = envConfig.AI_TESTER_CONFIG_PATH ?? 'ai-tester.config.yaml',
+	DEFAULT_CONFIG_FILE_PATH = 'ai-tester.config.yaml',
 	/**
 	 * The maximum reasoning effort in a test
 	 */
@@ -70,4 +68,4 @@ export const DEFAULT_TEMPERATURE = 0.3,
 	 *
 	 * The maximum time the model can take to answer a test or an evaluation.
 	 */
-	MAX_WAIT_TIME = 1000 * 120 // 120 seconds
+	DEFAULT_MAX_WAIT_TIME = 1000 * 120 // 120 seconds

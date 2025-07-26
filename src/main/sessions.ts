@@ -12,7 +12,7 @@ import {
 	type ToolSet,
 } from 'ai'
 
-import { envConfig, testsConfig, MAX_TEST_OUTPUT_TOKENS, MAX_WAIT_TIME } from '../config/index.js'
+import { envConfig, testsConfig, MAX_TEST_OUTPUT_TOKENS } from '../config/index.js'
 import { db } from '../database/db.js'
 import { schema } from '../database/schema.js'
 import { askYesNo } from '../utils/menus.js'
@@ -230,7 +230,7 @@ export const runAllTests = async () => {
 					messages,
 					temperature,
 					maxTokens: MAX_TEST_OUTPUT_TOKENS,
-					abortSignal: AbortSignal.timeout(MAX_WAIT_TIME),
+					abortSignal: AbortSignal.timeout(envConfig.MAX_WAIT_TIME),
 					schema: jsonSchema(test.structuredObjectSchema),
 				})
 				answer = JSON.stringify(response.object)
@@ -261,7 +261,7 @@ export const runAllTests = async () => {
 					temperature,
 					tools: toolSet,
 					maxTokens: MAX_TEST_OUTPUT_TOKENS,
-					abortSignal: AbortSignal.timeout(MAX_WAIT_TIME),
+					abortSignal: AbortSignal.timeout(envConfig.MAX_WAIT_TIME),
 				})
 
 				// if we called a tool, we need to extract the call(s) as the answer
