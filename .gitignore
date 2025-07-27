@@ -6,6 +6,9 @@
 # Ignore the environment file (should be created by the user)
 .env
 
+# Allow all files in docs/example (including normally ignored ones)
+!docs/example/**
+
 # Ignore dependencies (will be installed fresh by the user)
 node_modules
 
