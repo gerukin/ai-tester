@@ -13,7 +13,7 @@ import {
 } from 'ai'
 import type { z } from 'zod'
 
-import { envConfig, testsConfig, MAX_TEST_OUTPUT_TOKENS } from '../config/index.js'
+import { envConfig, testsConfig } from '../config/index.js'
 import { db } from '../database/db.js'
 import { schema } from '../database/schema.js'
 import { askYesNo } from '../utils/menus.js'
@@ -245,7 +245,7 @@ export const runAllTests = async () => {
 						system: test.sysPromptContent,
 						messages,
 						temperature,
-						maxTokens: MAX_TEST_OUTPUT_TOKENS,
+						maxTokens: envConfig.MAX_TEST_OUTPUT_TOKENS,
 						abortSignal: AbortSignal.timeout(envConfig.MAX_WAIT_TIME),
 						schema: jsonSchema(test.structuredObjectSchema),
 					})
@@ -282,7 +282,7 @@ export const runAllTests = async () => {
 						messages,
 						temperature,
 						tools: toolSet,
-						maxTokens: MAX_TEST_OUTPUT_TOKENS,
+						maxTokens: envConfig.MAX_TEST_OUTPUT_TOKENS,
 						abortSignal: AbortSignal.timeout(envConfig.MAX_WAIT_TIME),
 					})
 				} catch (err) {

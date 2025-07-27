@@ -45,17 +45,24 @@ MAX_EVALUATION_REASONING_EFFORT = 'low',
 /**
  * The maximum number of tokens the model can use to answer a test.
  */
-MAX_TEST_OUTPUT_TOKENS = 2000, 
+/**
+ * The maximum number of tokens the model can use to answer a test.
+ * Should always be greater than or equal to MAX_TEST_THINKING_TOKENS.
+ */
+MAX_TEST_OUTPUT_TOKENS = 7000, 
 /**
  * The maximum number of tokens the model can use to think about the test.
+ * Should always be less than or equal to MAX_TEST_OUTPUT_TOKENS.
  */
 MAX_TEST_THINKING_TOKENS = 5000, 
 /**
  * The maximum number of tokens the model can use to generate an evaluation.
+ * Should always be greater than or equal to MAX_EVALUATION_THINKING_TOKENS.
  */
-MAX_EVALUATION_OUTPUT_TOKENS = 500, 
+MAX_EVALUATION_OUTPUT_TOKENS = 2500, 
 /**
  * The maximum number of tokens the model can use to think about the evaluation.
+ * Should always be less than or equal to MAX_EVALUATION_OUTPUT_TOKENS.
  */
 MAX_EVALUATION_THINKING_TOKENS = 2000, 
 /**

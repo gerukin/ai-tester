@@ -1,7 +1,8 @@
 import {} from 'ai';
 import { wrapLanguageModel, extractReasoningMiddleware } from 'ai';
 import { addProviderSpecificProps } from './middlewares/add-provider-specific-props.js';
-import { MAX_TEST_REASONING_EFFORT, MAX_EVALUATION_REASONING_EFFORT, MAX_TEST_THINKING_TOKENS, MAX_EVALUATION_THINKING_TOKENS, } from '../../config/index.js';
+import { MAX_TEST_REASONING_EFFORT, MAX_EVALUATION_REASONING_EFFORT, } from '../../config/index.js';
+import { envConfig } from '../../config/environment.js';
 const providerModelRules = {
     'ollama.chat': [
         {
@@ -15,7 +16,7 @@ const providerModelRules = {
             matchRegex: /^gemini-2\.5.*/, // ex: gemini-2.5-flash
             middlewares: [
                 addProviderSpecificProps('vertex', {
-                    thinkingConfig: { includeThoughts: true, thinkingBudget: MAX_EVALUATION_THINKING_TOKENS },
+                    thinkingConfig: { includeThoughts: true, thinkingBudget: envConfig.MAX_EVALUATION_THINKING_TOKENS },
                 }),
             ],
         },
@@ -24,7 +25,7 @@ const providerModelRules = {
             matchRegex: /^gemini-2\.5.*/, // ex: gemini-2.5-flash
             middlewares: [
                 addProviderSpecificProps('vertex', {
-                    thinkingConfig: { includeThoughts: true, thinkingBudget: MAX_TEST_THINKING_TOKENS },
+                    thinkingConfig: { includeThoughts: true, thinkingBudget: envConfig.MAX_TEST_THINKING_TOKENS },
                 }),
             ],
         },
@@ -35,7 +36,7 @@ const providerModelRules = {
             matchRegex: /^claude-(3\.7|4).*/, // ex: claude-3.7 or claude-4
             middlewares: [
                 addProviderSpecificProps('anthropic', {
-                    thinking: { type: 'enabled', budgetTokens: MAX_EVALUATION_THINKING_TOKENS },
+                    thinking: { type: 'enabled', budgetTokens: envConfig.MAX_EVALUATION_THINKING_TOKENS },
                 }),
             ],
         },
@@ -44,7 +45,7 @@ const providerModelRules = {
             matchRegex: /^claude-(3\.7|4).*/, // ex: claude-3.7 or claude-4
             middlewares: [
                 addProviderSpecificProps('anthropic', {
-                    thinking: { type: 'enabled', budgetTokens: MAX_TEST_THINKING_TOKENS },
+                    thinking: { type: 'enabled', budgetTokens: envConfig.MAX_TEST_THINKING_TOKENS },
                 }),
             ],
         },
