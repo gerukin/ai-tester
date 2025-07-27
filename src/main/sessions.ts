@@ -11,6 +11,7 @@ import {
 	type GenerateTextResult,
 	type ToolSet,
 } from 'ai'
+import type { z } from 'zod'
 
 import { envConfig, testsConfig, MAX_TEST_OUTPUT_TOKENS } from '../config/index.js'
 import { db } from '../database/db.js'
@@ -19,9 +20,23 @@ import { askYesNo } from '../utils/menus.js'
 import { providers as llmProviders, wrapModel } from '../llms/index.js'
 import { getSectionsFromMarkdownContent, sectionsToAiMessages, getReferencedFiles } from '../utils/markdown.js'
 import { ToolDefinition } from './tools.js'
-import type { z } from 'zod'
+import { logModelError } from '../utils/errors.js'
+import { state } from '../utils/state.js'
+
+/**
+ * Logs the number of skipped tests based on the current attempt and total attempts.
+ * @param attempts The total number of attempts for the test.
+ * @param attempt The current attempt index.
+ * @returns The number of skipped attempts.
+ */
+const logSkippedTests = (attempts: number, attempt: number) => {
+	const skippedAttempts = attempts - attempt - 1
+	if (skippedAttempts > 0) console.log(`⏭️ Skipping ${skippedAttempts} similar attempt(s)...`)
+	return skippedAttempts
+}
 
 export const runAllTests = async () => {
+	state.startRun()
 	console.log('Checking for tests to run...')
 
 	// we query the DB to get all missing tests not yet run
@@ -224,15 +239,21 @@ export const runAllTests = async () => {
 
 			if (test.structuredObjectSchema) {
 				// If a structured object schema is present, use generateObject
-				response = await generateObject({
-					model,
-					system: test.sysPromptContent,
-					messages,
-					temperature,
-					maxTokens: MAX_TEST_OUTPUT_TOKENS,
-					abortSignal: AbortSignal.timeout(envConfig.MAX_WAIT_TIME),
-					schema: jsonSchema(test.structuredObjectSchema),
-				})
+				try {
+					response = await generateObject({
+						model,
+						system: test.sysPromptContent,
+						messages,
+						temperature,
+						maxTokens: MAX_TEST_OUTPUT_TOKENS,
+						abortSignal: AbortSignal.timeout(envConfig.MAX_WAIT_TIME),
+						schema: jsonSchema(test.structuredObjectSchema),
+					})
+				} catch (err) {
+					logModelError(err, 'test', i, totalMissingTests, test.modelVersionCode)
+					i += logSkippedTests(testsConfig.attempts, attempt)
+					break
+				}
 				answer = JSON.stringify(response.object)
 				reasoning = undefined // reasoning is not available for structured objects
 			} else {
@@ -254,15 +275,21 @@ export const runAllTests = async () => {
 					}
 				}
 
-				response = await generateText({
-					model,
-					system: test.sysPromptContent,
-					messages,
-					temperature,
-					tools: toolSet,
-					maxTokens: MAX_TEST_OUTPUT_TOKENS,
-					abortSignal: AbortSignal.timeout(envConfig.MAX_WAIT_TIME),
-				})
+				try {
+					response = await generateText({
+						model,
+						system: test.sysPromptContent,
+						messages,
+						temperature,
+						tools: toolSet,
+						maxTokens: MAX_TEST_OUTPUT_TOKENS,
+						abortSignal: AbortSignal.timeout(envConfig.MAX_WAIT_TIME),
+					})
+				} catch (err) {
+					logModelError(err, 'test', i, totalMissingTests, test.modelVersionCode)
+					i += logSkippedTests(testsConfig.attempts, attempt)
+					break
+				}
 
 				// if we called a tool, we need to extract the call(s) as the answer
 				if (response.toolCalls?.length > 0) {
@@ -304,4 +331,6 @@ export const runAllTests = async () => {
 			i++
 		}
 	}
+
+	state.endRun()
 }

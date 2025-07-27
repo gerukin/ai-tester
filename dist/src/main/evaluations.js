@@ -2,7 +2,7 @@
  * This module is responsible for running all session evaluations that have not been run yet.
  */
 import { and, or, eq, ne, inArray, sql, lt, countDistinct, aliasedTable } from 'drizzle-orm';
-import { generateObject, TypeValidationError } from 'ai';
+import { generateObject } from 'ai';
 import z from 'zod';
 import { testsConfig, MAX_EVALUATION_OUTPUT_TOKENS, envConfig } from '../config/index.js';
 import { db } from '../database/db.js';
@@ -10,6 +10,8 @@ import { schema } from '../database/schema.js';
 import { askYesNo } from '../utils/menus.js';
 import { providers as llmProviders, wrapModel } from '../llms/index.js';
 import { getSectionsFromMarkdownContent, sectionsToAiMessages } from '../utils/markdown.js';
+import { logModelError } from '../utils/errors.js';
+import { state } from '../utils/state.js';
 const evalSchema = z.object({
     // Note: `.nullable()` is not supported by some providers (like Vertex AI) as it generates an unsupported `anyOf` schema
     feedback: z
@@ -21,6 +23,7 @@ const evalSchema = z.object({
         .describe("A boolean value indicating whether the AI candidate's response is as expected in the evaluation instructions."),
 });
 export const runAllEvaluations = async () => {
+    state.startRun();
     console.log('Checking for evaluations to run...');
     // we query the DB to get all missing evaluations not yet run
     const { testVersions, prompts, testToTagRels, testEvaluationInstructionsVersions, testToEvaluationInstructionsRels, tags, sessions, modelVersions, providers, promptVersions, sessionEvaluations, } = schema;
@@ -173,16 +176,11 @@ export const runAllEvaluations = async () => {
                 });
             }
             catch (err) {
-                if (err instanceof TypeValidationError) {
-                    console.error(`❌ Failed eval [${i} of ${totalMissingEvaluations}] with model ${evaluation.modelVersionCode} (model failed to generate a valid evaluation object)\n${err.message}`);
-                }
-                else {
-                    console.error(`❌ Failed eval [${i} of ${totalMissingEvaluations}] with model ${evaluation.modelVersionCode} (model failed to generate a valid evaluation object)`);
-                }
-                const skippedJudgments = testsConfig.evaluationsPerEvaluator - judgment;
-                i = i + (testsConfig.evaluationsPerEvaluator - judgment);
-                if (skippedJudgments > 1)
-                    console.log(`⏭️ Skipping ${skippedJudgments - 1} similar judgment(s)...`);
+                logModelError(err, 'eval', i, totalMissingEvaluations, evaluation.modelVersionCode);
+                const skippedJudgments = testsConfig.evaluationsPerEvaluator - judgment - 1;
+                i += testsConfig.evaluationsPerEvaluator - judgment;
+                if (skippedJudgments > 0)
+                    console.log(`⏭️ Skipping ${skippedJudgments} similar judgment(s)...`);
                 break;
             }
             const endTime = Date.now();
@@ -205,4 +203,5 @@ export const runAllEvaluations = async () => {
             i++;
         }
     }
+    state.endRun();
 };

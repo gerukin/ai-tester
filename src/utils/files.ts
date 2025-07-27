@@ -249,3 +249,16 @@ export const listAllYamlFiles = (basePath: string): string[] => {
 	}
 	return allFiles
 }
+
+/**
+ * Create a new file with the given content, ensuring the directory exists.
+ *
+ * @param filePath The path to the file to create
+ * @param content The content to write to the file
+ * @param encoding The encoding to use when writing the file, defaults to 'utf-8'
+ */
+export const createFile = (filePath: string, content: string | Buffer, encoding: BufferEncoding = 'utf-8') => {
+	ensureDirectoryExists(filePath)
+	fs.writeFileSync(filePath, content, { encoding })
+	return filePath
+}
