@@ -1,5 +1,6 @@
-import { askYesNo, selectMenu } from './utils/menus.js';
 import { testsConfig } from './config/index.js';
+import { askYesNo, selectMenu, filterSelectMenu, ask } from './utils/menus.js';
+import { getOpenRouterModels, formatOpenRouterModelsForDisplay } from './apis/open-router.js';
 import { updatePromptsInDb, updateTestsInDb, runAllTests, runAllEvaluations, showStats, updateStructuredObjectsInDb, updateToolsInDb, } from './main/index.js';
 const exit = () => process.exit(0);
 const updateAll = async () => {
@@ -23,7 +24,26 @@ const mainMenu = async () => {
             description: 'View statistics and analysis for costs, tests, and evaluations.',
             action: statsMenu,
         },
-        undefined,
+        {
+            name: 'OpenRouter API',
+            description: 'Interact with OpenRouter API features.',
+            action: () => selectMenu('OpenRouter API:', [
+                {
+                    name: 'Browse models',
+                    description: 'Browse / filter, and view remote model data from OpenRouter.',
+                    action: browseOpenRouterModelsMenu,
+                },
+                {
+                    name: 'Compare models',
+                    description: 'Compare models matching a search filter.',
+                    action: compareOpenRouterModelsMenu,
+                },
+                {
+                    name: 'Back',
+                    description: 'Return to main menu.',
+                },
+            ]),
+        },
         {
             name: 'Update the database from files',
             description: 'Synchronize all prompt, test, structured object, and tool definitions with the database.',
@@ -39,7 +59,6 @@ const mainMenu = async () => {
             description: 'Update the database, then execute all evaluations that have not yet been run.',
             action: () => runMissingStuff(runAllEvaluations),
         },
-        undefined,
         {
             name: 'Exit',
             description: 'Exit the application.',
@@ -77,6 +96,23 @@ const statsMenu = async () => {
             },
         ]);
     }
+};
+const browseOpenRouterModelsMenu = async () => {
+    const models = await getOpenRouterModels();
+    await filterSelectMenu('Search and select an OpenRouter model:', models.map(model => ({
+        name: model.name,
+        description: model._enhanced_description,
+        action: () => {
+            console.log(model._enhanced_description);
+            console.log(Object.fromEntries(Object.entries(model).filter(([key]) => !key.match(new RegExp('^_|description', 'i')))));
+        },
+    })));
+};
+const compareOpenRouterModelsMenu = async () => {
+    const models = await getOpenRouterModels();
+    const regex = await ask('Enter a regex to compare matching models:');
+    const matchingModels = models.filter(model => regex && model.name.match(new RegExp(regex, 'i')));
+    console.table(formatOpenRouterModelsForDisplay(matchingModels));
 };
 while (true) {
     await mainMenu();
