@@ -6,11 +6,11 @@ import { and, or, eq, ne, inArray, sql, lt, countDistinct, aliasedTable } from '
 import { generateObject, type GenerateObjectResult } from 'ai'
 import z from 'zod'
 
-import { testsConfig, envConfig } from '../config/index.js'
+import { resolveTestsConfig, envConfig } from '../config/index.js'
 import { db } from '../database/db.js'
 import { schema } from '../database/schema.js'
 import { askYesNo } from '../utils/menus.js'
-import { providers as llmProviders, wrapModel } from '../llms/index.js'
+import { getProvider, wrapModel } from '../llms/index.js'
 import { getSectionsFromMarkdownContent, sectionsToAiMessages } from '../utils/markdown.js'
 import { logModelError } from '../utils/errors.js'
 import { state } from '../utils/state.js'
@@ -33,8 +33,19 @@ const evalSchema = z.object({
 type EvalSchema = z.infer<typeof evalSchema>
 
 export const runAllEvaluations = async () => {
+	const testsConfig = resolveTestsConfig()
 	state.startRun()
 	console.log('Checking for evaluations to run...')
+
+	if (testsConfig.candidates.length === 0) {
+		console.log('⚠️ No active candidate models are configured.')
+		return
+	}
+
+	if (testsConfig.evaluators.length === 0) {
+		console.log('⚠️ No active evaluator models are configured.')
+		return
+	}
 
 	// we query the DB to get all missing evaluations not yet run
 	const {
@@ -47,6 +58,7 @@ export const runAllEvaluations = async () => {
 		sessions,
 		modelVersions,
 		providers,
+		models,
 		promptVersions,
 		sessionEvaluations,
 	} = schema
@@ -73,6 +85,8 @@ export const runAllEvaluations = async () => {
 	)
 	const candidateModelVersionAlias = aliasedTable(modelVersions, 'candidate_model_version_alias')
 	const candidateProviderAlias = aliasedTable(providers, 'candidate_provider_alias')
+	const candidateModelAlias = aliasedTable(models, 'candidate_model_alias')
+	const evaluatorModelAlias = aliasedTable(models, 'evaluator_model_alias')
 
 	const testSysPromptAlias = aliasedTable(promptVersions, 'test_sys_prompt_alias')
 	const missingEvaluations = await db
@@ -92,9 +106,14 @@ export const runAllEvaluations = async () => {
 		})
 		.from(modelVersions)
 		.innerJoin(
+			evaluatorModelAlias,
+			and(eq(evaluatorModelAlias.id, modelVersions.modelId), eq(evaluatorModelAlias.active, true), eq(modelVersions.active, true))
+		)
+		.innerJoin(
 			providers,
 			and(
 				eq(providers.id, modelVersions.providerId),
+				eq(providers.active, true),
 				or(
 					...testsConfig.evaluators.map(({ provider, model }) =>
 						and(eq(providers.code, provider), eq(modelVersions.providerModelCode, model))
@@ -127,9 +146,14 @@ export const runAllEvaluations = async () => {
 
 		.innerJoin(candidateModelVersionAlias, eq(candidateModelVersionAlias.id, sessions.modelVersionId))
 		.innerJoin(
+			candidateModelAlias,
+			and(eq(candidateModelAlias.id, candidateModelVersionAlias.modelId), eq(candidateModelAlias.active, true), eq(candidateModelVersionAlias.active, true))
+		)
+		.innerJoin(
 			candidateProviderAlias,
 			and(
 				eq(candidateProviderAlias.id, candidateModelVersionAlias.providerId),
+				eq(candidateProviderAlias.active, true),
 				or(
 					...testsConfig.candidates.map(({ provider, model }) =>
 						and(eq(candidateProviderAlias.code, provider), eq(candidateModelVersionAlias.providerModelCode, model))
@@ -284,7 +308,7 @@ export const runAllEvaluations = async () => {
 	// For each missing test, we will run the test
 	let i = 1
 	for (const evaluation of missingEvaluations) {
-		const provider = llmProviders[evaluation.providerCode as keyof typeof llmProviders]
+		const provider = getProvider(evaluation.providerCode)
 		if (!provider) throw new Error(`Provider ${evaluation.providerCode} not found`)
 		const model = wrapModel(provider(evaluation.modelVersionCode), 'evaluator')
 

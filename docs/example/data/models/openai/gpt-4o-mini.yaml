@@ -1,0 +1,10 @@
+code: gpt-4o-mini
+provider: openai
+providerModelCode: gpt-4o-mini-2024-07-18
+costs:
+  - costPerCall: 0
+    costPerPromptToken: 0.00000015
+    costPerCompletionToken: 0.0000006
+    costPerHour: 0
+    currency: USD
+    validFrom: 2024-07-18

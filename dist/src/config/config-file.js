@@ -3,6 +3,7 @@ import yaml from 'yaml';
 import { z } from 'zod';
 import { DEFAULT_TEMPERATURE, DEFAULT_ATTEMPTS, DEFAULT_PROHIBITED_TAGS, DEFAULT_EVALUATIONS } from './constants.js';
 import { envConfig } from './environment.js';
+import { filterConfiguredModels, getFileBackedModelRegistry } from './model-registry.js';
 // if the config file is not found, we throw an error
 if (!fs.existsSync(envConfig.AI_TESTER_CONFIG_PATH)) {
     throw new Error(`Config file not found at ${envConfig.AI_TESTER_CONFIG_PATH}`);
@@ -19,7 +20,19 @@ const models = z.array(z.object({
     prohibitedTags: prohibitedTags.optional(),
     /** Temperature to apply to this model for this session only */
     temperature: temperature.optional(),
-}));
+})).superRefine((models, ctx) => {
+    const seen = new Set();
+    for (const model of models) {
+        const key = `${model.provider}:${model.model}`;
+        if (seen.has(key)) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: `Duplicate configured model reference: ${key}`,
+            });
+        }
+        seen.add(key);
+    }
+});
 const analysisQuery = z.object({
     /** Description of the query */
     description: z.string(),
@@ -40,8 +53,7 @@ const analysisQuery = z.object({
     /** Include only evaluators using this temperature */
     evaluatorsTemperature: temperature.optional(),
 });
-export const testsConfig = z
-    .object({
+const testsConfigSchema = z.object({
     /** Models to test */
     candidates: models,
     /**
@@ -71,5 +83,22 @@ export const testsConfig = z
     evaluationsPerEvaluator: z.number().min(1).default(DEFAULT_EVALUATIONS),
     /** Preset queries for analysis of the test DB */
     analysisQueries: z.array(analysisQuery).optional(),
-})
+});
+export const testsConfig = testsConfigSchema
     .parse(yaml.parse(fs.readFileSync(envConfig.AI_TESTER_CONFIG_PATH, 'utf-8')));
+const resolveAnalysisQuery = (query, registry = getFileBackedModelRegistry()) => ({
+    ...query,
+    candidates: query.candidates
+        ? filterConfiguredModels(query.candidates, `analysis query "${query.description}" candidates`, registry).availableModels
+        : undefined,
+    evaluators: query.evaluators
+        ? filterConfiguredModels(query.evaluators, `analysis query "${query.description}" evaluators`, registry).availableModels
+        : undefined,
+});
+export const resolveTestsConfig = (config = testsConfig, registry = getFileBackedModelRegistry()) => ({
+    ...config,
+    candidates: filterConfiguredModels(config.candidates, 'tests config candidates', registry).availableModels,
+    evaluators: filterConfiguredModels(config.evaluators, 'tests config evaluators', registry).availableModels,
+    analysisQueries: config.analysisQueries?.map(query => resolveAnalysisQuery(query, registry)),
+});
+void resolveTestsConfig();

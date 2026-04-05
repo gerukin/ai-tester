@@ -4,6 +4,7 @@ import { z } from 'zod'
 
 import { DEFAULT_TEMPERATURE, DEFAULT_ATTEMPTS, DEFAULT_PROHIBITED_TAGS, DEFAULT_EVALUATIONS } from './constants.js'
 import { envConfig } from './environment.js'
+import { filterConfiguredModels, getFileBackedModelRegistry } from './model-registry.js'
 
 // if the config file is not found, we throw an error
 if (!fs.existsSync(envConfig.AI_TESTER_CONFIG_PATH)) {
@@ -27,7 +28,19 @@ const models = z.array(
 		/** Temperature to apply to this model for this session only */
 		temperature: temperature.optional(),
 	})
-)
+).superRefine((models, ctx) => {
+	const seen = new Set<string>()
+	for (const model of models) {
+		const key = `${model.provider}:${model.model}`
+		if (seen.has(key)) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: `Duplicate configured model reference: ${key}`,
+			})
+		}
+		seen.add(key)
+	}
+})
 
 const analysisQuery = z.object({
 	/** Description of the query */
@@ -60,8 +73,7 @@ const analysisQuery = z.object({
 
 export type AnalysisQuery = z.infer<typeof analysisQuery>
 
-export const testsConfig = z
-	.object({
+const testsConfigSchema = z.object({
 		/** Models to test */
 		candidates: models,
 
@@ -101,4 +113,27 @@ export const testsConfig = z
 		/** Preset queries for analysis of the test DB */
 		analysisQueries: z.array(analysisQuery).optional(),
 	})
+
+export type TestsConfig = z.infer<typeof testsConfigSchema>
+
+export const testsConfig = testsConfigSchema
 	.parse(yaml.parse(fs.readFileSync(envConfig.AI_TESTER_CONFIG_PATH, 'utf-8')))
+
+const resolveAnalysisQuery = (query: AnalysisQuery, registry = getFileBackedModelRegistry()): AnalysisQuery => ({
+	...query,
+	candidates: query.candidates
+		? filterConfiguredModels(query.candidates, `analysis query "${query.description}" candidates`, registry).availableModels
+		: undefined,
+	evaluators: query.evaluators
+		? filterConfiguredModels(query.evaluators, `analysis query "${query.description}" evaluators`, registry).availableModels
+		: undefined,
+})
+
+export const resolveTestsConfig = (config: TestsConfig = testsConfig, registry = getFileBackedModelRegistry()) => ({
+	...config,
+	candidates: filterConfiguredModels(config.candidates, 'tests config candidates', registry).availableModels,
+	evaluators: filterConfiguredModels(config.evaluators, 'tests config evaluators', registry).availableModels,
+	analysisQueries: config.analysisQueries?.map(query => resolveAnalysisQuery(query, registry)),
+})
+
+void resolveTestsConfig()

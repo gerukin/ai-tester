@@ -5,6 +5,7 @@ import { runAllEvaluations } from './evaluations.js'
 import { showStats } from './stats.js'
 import { updateStructuredObjectsInDb } from './structured-objects.js'
 import { updateToolsInDb } from './tools.js'
+import { updateProvidersInDb } from './providers.js'
 
 export {
 	updatePromptsInDb,
@@ -14,4 +15,5 @@ export {
 	showStats,
 	updateStructuredObjectsInDb,
 	updateToolsInDb,
+	updateProvidersInDb,
 }

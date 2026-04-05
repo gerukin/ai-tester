@@ -1,17 +1,12 @@
 # Manual SQL data
 
-You will need to manually update parts of the database to insert missing data referenced in your configuration file, or which cannot (or is not) maintained by this package directly.
+Manual SQL is useful for data that is intentionally outside the file-backed registry, such as:
+
+- currencies
+- currency exchange rates
+- private analysis tables or views
 
 > [!TIP]
-> You can also create your own extra tables and views to store additional data, or to help with analysis.
->
-> If you do this, we recommend you prefix your tables and views with `_` or `priv_` to avoid conflicts with future versions of this package. Those namespace prefixes will never be used by this package.
+> If you add your own tables or views, prefer prefixes such as `_` or `priv_` to avoid future naming conflicts.
 
-Data which needs to be manually inserted includes:
-
-- [ ] [Providers](config-file.md#providers)
-- [ ] [Models](config-file.md#models)
-- [ ] [Model versions](config-file.md#model-versions)
-- [ ] Model version costs and currencies
-
-Refer to the [example files](./example/data/sql) for more information on how to insert the data.
+See the [example SQL files](./example/data/sql) for currency/rate examples only.

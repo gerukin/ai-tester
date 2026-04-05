@@ -1,0 +1,10 @@
+code: gpt-4o-mini-openrouter
+provider: openrouter
+providerModelCode: openai/gpt-4o-mini
+costs:
+  - costPerCall: 0
+    costPerPromptToken: 0.000000165
+    costPerCompletionToken: 0.00000066
+    costPerHour: 0
+    currency: USD
+    validFrom: 2024-07-18

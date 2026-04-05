@@ -5,6 +5,8 @@ export const models = sqliteTable('models', {
     id: integer('id').primaryKey(),
     /** Internal unique code identifying this model (this does not need to match the model maker's) */
     code: text('code').notNull().unique(),
+    /** Whether this model is currently active in YAML */
+    active: integer('active', { mode: 'boolean' }).notNull().default(true),
     createdAt: integer('created_at', { mode: 'timestamp' })
         .notNull()
         .default(sql `(strftime('%s', 'now'))`),
@@ -24,6 +26,8 @@ export const modelVersions = sqliteTable('model_versions', {
     providerModelCode: text('provider_model_code').notNull(),
     // This could be anything the provider uses to identify the model beyond the code (ex: a `digest` in Ollama)
     extraIdentifier: text('extra_identifier'),
+    /** Whether this provider model version is currently active in YAML */
+    active: integer('active', { mode: 'boolean' }).notNull().default(true),
     createdAt: integer('created_at', { mode: 'timestamp' })
         .notNull()
         .default(sql `(strftime('%s', 'now'))`),

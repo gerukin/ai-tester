@@ -13,11 +13,11 @@ import {
 } from 'ai'
 import type { z } from 'zod'
 
-import { envConfig, testsConfig } from '../config/index.js'
+import { envConfig, resolveTestsConfig } from '../config/index.js'
 import { db } from '../database/db.js'
 import { schema } from '../database/schema.js'
 import { askYesNo } from '../utils/menus.js'
-import { providers as llmProviders, wrapModel } from '../llms/index.js'
+import { getProvider, wrapModel } from '../llms/index.js'
 import { getSectionsFromMarkdownContent, sectionsToAiMessages, getReferencedFiles } from '../utils/markdown.js'
 import { ToolDefinition } from './tools.js'
 import { logModelError } from '../utils/errors.js'
@@ -36,8 +36,14 @@ const logSkippedTests = (attempts: number, attempt: number) => {
 }
 
 export const runAllTests = async () => {
+	const testsConfig = resolveTestsConfig()
 	state.startRun()
 	console.log('Checking for tests to run...')
+
+	if (testsConfig.candidates.length === 0) {
+		console.log('⚠️ No active candidate models are configured.')
+		return
+	}
 
 	// we query the DB to get all missing tests not yet run
 	const {
@@ -47,6 +53,7 @@ export const runAllTests = async () => {
 		sessions,
 		modelVersions,
 		providers,
+		models,
 		testToSystemPromptVersionRels,
 		promptVersions,
 		structuredObjectVersions,
@@ -89,10 +96,12 @@ export const runAllTests = async () => {
 			)`,
 		})
 		.from(modelVersions)
+		.innerJoin(models, and(eq(models.id, modelVersions.modelId), eq(models.active, true), eq(modelVersions.active, true)))
 		.innerJoin(
 			providers,
 			and(
 				eq(providers.id, modelVersions.providerId),
+				eq(providers.active, true),
 				or(
 					...testsConfig.candidates.map(({ provider, model }) =>
 						and(eq(providers.code, provider), eq(modelVersions.providerModelCode, model))
@@ -211,7 +220,7 @@ export const runAllTests = async () => {
 	// For each missing test, we will run the test
 	let i = 1
 	for (const test of missingTests) {
-		const provider = llmProviders[test.providerCode as keyof typeof llmProviders]
+		const provider = getProvider(test.providerCode)
 		if (!provider) throw new Error(`Provider ${test.providerCode} not found`)
 		const model = wrapModel(provider(test.modelVersionCode), 'candidate')
 

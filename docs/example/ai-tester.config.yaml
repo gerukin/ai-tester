@@ -6,6 +6,8 @@ candidates:
     model: phi4:14b-q4_K_M
   - provider: openai
     model: gpt-4o-mini-2024-07-18
+  - provider: openrouter
+    model: openai/gpt-4o-mini
   - provider: vertex
     model: gemini-1.5-flash-002
 

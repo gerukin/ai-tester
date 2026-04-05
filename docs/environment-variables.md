@@ -10,6 +10,13 @@ The following environment variables are used by the AI Tester...
 - `AI_TESTER_LOGS_DIR`: Path to the logs directory (relative to the root of the project). Example: `.local/data/logs`.
 - `AI_TESTER_TESTS_DIR`: Path to the tests directory (relative to the root of the project). Example: `.local/data/tests`.
 - `AI_TESTER_PROMPTS_DIR`: Path to the prompts directory (relative to the root of the project). Example: `.local/data/prompts`.
+- `AI_TESTER_PROVIDERS_DIR`: Path to the provider YAML directory. Example: `.local/data/providers`.
+- `AI_TESTER_MODELS_DIR`: Path to the model YAML directory. Example: `.local/data/models`.
+
+> [!IMPORTANT]
+> `AI_TESTER_PROVIDERS_DIR` and `AI_TESTER_MODELS_DIR` are required startup configuration.
+> The app expects both directories to exist and contain your file-backed registry.
+> If either variable is missing, points to the wrong place, or the directory has not been created yet, startup will fail immediately.
 
 ## Optional variables
 
@@ -55,3 +62,7 @@ If not using a specific model provider, you can ignore the corresponding environ
 ### Perplexity
 
 - `PERPLEXITY_API_KEY`: Your Perplexity API key.
+
+### OpenAI-compatible providers
+
+- `OPENROUTER_API_KEY`: Your OpenRouter API key, when using an OpenRouter provider YAML.

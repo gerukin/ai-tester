@@ -1,10 +1,14 @@
 # Config file options
 
-The config file is the sole source of truth for the current tests and evaluations. Current and past tests/evals are stored in the database (see [Historical data](environment-variables.md)).
+The config file is the source of truth for which tests, evaluations, and analysis queries should run. Current and past runs are stored in the database.
+
+The `provider` + `model` references in this file are matched against the active provider/model YAML registry described in [models.md](models.md).
+
+If a referenced provider/model pair is not currently available, the app prints a warning at startup and skips that entry.
 
 ## Creating the config file
 
-You config file can be created anywhere and named anything, but the path to it must be set as the `AI_TESTER_CONFIG_PATH` environment variable (typically in your `.env` or `.env.local` file).
+Your config file can be created anywhere and named anything, but the path must be set as `AI_TESTER_CONFIG_PATH`.
 
 ```env
 AI_TESTER_CONFIG_PATH=.local/ai-tester.config.yaml
@@ -16,7 +20,7 @@ AI_TESTER_CONFIG_PATH=.local/ai-tester.config.yaml
 # Description: Configuration file for the tests to run
 
 # Model versions to test
-# 🚨 the `model` key is a reference to the model version in the database (not the model name)
+# 🚨 the `model` key is the providerModelCode from the corresponding model YAML file
 candidates:
   - provider: ollama
     model: gemma2:2b-instruct-q8_0
@@ -109,23 +113,14 @@ analysisQueries:
         # (not specified means no restriction for this model)
 ```
 
-### Providers
+### Model references
 
-A provider is any service which gives access to model inference, either through an API or a local service. Each provider exposes one or more models.
+A provider/model pair in the config maps to:
 
-### Model versions
+- a provider YAML file
+- a model YAML file whose `providerModelCode` matches the `model` value
 
-A model version is a specific version of a model. Each model version is associated with a provider, and has specific characteristics (e.g. cost, max tokens, etc.) and supported features (e.g. Json mode, tools, etc.).
-
-> [!NOTE]
-> Support for additional features is planned for future versions of this package.
-
-> [!IMPORTANT]
-> The `model` key in the config file is a reference to the model version in the database (not the model name).
-
-#### Models
-
-The concept of `models` is kept in the database as well, and they are essentially groups to hold model versions. Each model can have multiple versions (potentially from different providers). This is NOT used in the config file, but can be useful for analysis.
+The model grouping `code` from the model YAML is not used directly in this config file.
 
 ### Analysis queries
 
@@ -142,4 +137,4 @@ Analysis queries are a way to pre-define queries to run on the database. These q
 > [!NOTE]
 > Only active tests with completed evaluations are shown in the analysis queries.
 >
-> For the cost analysis, the precision is limited to sensible values for the given currency. The model cost information and currency exchange rates are assumed to already be stored in the database. This is done by inserting data there directly, and not managed by this package.
+> Model costs come from model YAML files. Currency exchange rates are still maintained separately in the database.

@@ -6,9 +6,11 @@ import {
 	runAllEvaluations,
 	updateStructuredObjectsInDb,
 	updateToolsInDb,
+	updateProvidersInDb,
 } from '../main/index.js'
 
 const updateAll = async () => {
+	await updateProvidersInDb()
 	await updateStructuredObjectsInDb()
 	await updateToolsInDb()
 	await updatePromptsInDb()
@@ -16,7 +18,8 @@ const updateAll = async () => {
 }
 
 const runMissingStuff = async (fnc: typeof runAllTests | typeof runAllEvaluations) => {
-	if (!(await askYesNo('This will first update the tests & prompts DB. Do you want to continue?'))) return
+	if (!(await askYesNo('This will first update the file-backed registry and sync the DB. Do you want to continue?')))
+		return
 
 	console.log() // empty line
 
@@ -29,7 +32,7 @@ const runMissingStuff = async (fnc: typeof runAllTests | typeof runAllEvaluation
 export const testsAndEvalsMenus = [
 	{
 		name: 'Update the database from files',
-		description: 'Synchronize all prompt, test, structured object, and tool definitions with the database.',
+		description: 'Synchronize providers, models, prompts, tests, structured objects, and tools with the database.',
 		action: updateAll,
 	},
 	{

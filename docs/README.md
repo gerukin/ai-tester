@@ -33,9 +33,10 @@ Basic steps:
 2. Create your [prompts](prompts.md).
 3. Create your [tests and evaluations](tests-and-evaluations.md).
 4. Create your [configuration file](config-file.md).
-5. Add some [SQL data](sql-data.md) to the DB for your supported models and cost data.
+5. Create your [provider and model YAML files](models.md).
+6. Add any remaining [manual SQL data](sql-data.md), such as currency exchange rates.
 
-Then you can run the [migrations](#database-migrations).
+Only after that should you run [migrations](#database-migrations) or any other command.
 
 ## Database migrations
 

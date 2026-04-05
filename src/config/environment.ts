@@ -19,8 +19,10 @@ export const envConfig = z
 		AI_TESTER_LOGS_DIR: z.string().min(1),
 		AI_TESTER_TESTS_DIR: z.string().min(1),
 		AI_TESTER_PROMPTS_DIR: z.string().min(1),
+		AI_TESTER_MODELS_DIR: z.string().min(1),
 		AI_TESTER_STRUCTURED_SCHEMAS_DIR: z.string().min(1).optional(),
 		AI_TESTER_TOOL_DEFINITIONS_DIR: z.string().min(1).optional(),
+		AI_TESTER_PROVIDERS_DIR: z.string().min(1),
 		AI_TESTER_CONFIG_PATH: z.string().min(1).optional().default(DEFAULT_CONFIG_FILE_PATH),
 
 		// Max wait time config
@@ -42,6 +44,7 @@ export const envConfig = z
 
 		// OpenAI config
 		OPENAI_API_KEY: z.string().min(10).optional(),
+		OPENROUTER_API_KEY: z.string().min(10).optional(),
 
 		// Perplexity config
 		PERPLEXITY_API_KEY: z.string().min(10).optional(),
@@ -59,8 +62,10 @@ export const envConfig = z
 		AI_TESTER_SQLITE_DB_PATH: process.env['AI_TESTER_SQLITE_DB_PATH'],
 		AI_TESTER_TESTS_DIR: process.env['AI_TESTER_TESTS_DIR'],
 		AI_TESTER_PROMPTS_DIR: process.env['AI_TESTER_PROMPTS_DIR'],
+		AI_TESTER_MODELS_DIR: process.env['AI_TESTER_MODELS_DIR'],
 		AI_TESTER_STRUCTURED_SCHEMAS_DIR: process.env['AI_TESTER_STRUCTURED_SCHEMAS_DIR'],
 		AI_TESTER_TOOL_DEFINITIONS_DIR: process.env['AI_TESTER_TOOL_DEFINITIONS_DIR'],
+		AI_TESTER_PROVIDERS_DIR: process.env['AI_TESTER_PROVIDERS_DIR'],
 		AI_TESTER_CONFIG_PATH: process.env['AI_TESTER_CONFIG_PATH'],
 
 		// Max wait time config
@@ -82,6 +87,7 @@ export const envConfig = z
 
 		// OpenAI config
 		OPENAI_API_KEY: process.env['OPENAI_API_KEY'],
+		OPENROUTER_API_KEY: process.env['OPENROUTER_API_KEY'],
 
 		// Perplexity config
 		PERPLEXITY_API_KEY: process.env['PERPLEXITY_API_KEY'],

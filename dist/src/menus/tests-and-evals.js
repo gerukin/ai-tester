@@ -1,13 +1,14 @@
 import { askYesNo } from '../utils/menus.js';
-import { updatePromptsInDb, updateTestsInDb, runAllTests, runAllEvaluations, updateStructuredObjectsInDb, updateToolsInDb, } from '../main/index.js';
+import { updatePromptsInDb, updateTestsInDb, runAllTests, runAllEvaluations, updateStructuredObjectsInDb, updateToolsInDb, updateProvidersInDb, } from '../main/index.js';
 const updateAll = async () => {
+    await updateProvidersInDb();
     await updateStructuredObjectsInDb();
     await updateToolsInDb();
     await updatePromptsInDb();
     await updateTestsInDb();
 };
 const runMissingStuff = async (fnc) => {
-    if (!(await askYesNo('This will first update the tests & prompts DB. Do you want to continue?')))
+    if (!(await askYesNo('This will first update the file-backed registry and sync the DB. Do you want to continue?')))
         return;
     console.log(); // empty line
     await updateAll();
@@ -17,7 +18,7 @@ const runMissingStuff = async (fnc) => {
 export const testsAndEvalsMenus = [
     {
         name: 'Update the database from files',
-        description: 'Synchronize all prompt, test, structured object, and tool definitions with the database.',
+        description: 'Synchronize providers, models, prompts, tests, structured objects, and tools with the database.',
         action: updateAll,
     },
     {

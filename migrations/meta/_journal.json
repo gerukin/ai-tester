@@ -43,6 +43,13 @@
       "when": 1753091527938,
       "tag": "0005_cultured_bill_hollister",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1774996604876,
+      "tag": "0006_hard_firedrake",
+      "breakpoints": true
     }
   ]
 }

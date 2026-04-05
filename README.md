@@ -15,7 +15,7 @@ Create a `.env` file and/or a `.env.local` file at the root of the directory, fo
 
 Then run the [migrations](#migrations).
 
-Now you will need to create the necessary prompts, tests, and config file. Then add some data to the DB for your supported models. Refer to the [docs](/docs) for more information.
+Now you will need to create the necessary prompts, tests, config file, provider YAML files, and model YAML files. Refer to the [docs](/docs) for more information.
 
 > [!IMPORTANT]
 > Put all files (except `.env` and `.env.local`) which are not committed to the repository in the `.local` directory.

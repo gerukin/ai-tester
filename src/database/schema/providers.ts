@@ -11,6 +11,9 @@ export const providers = sqliteTable('providers', {
 
 	/** The name of the vendor */
 	name: text('name').notNull().unique(),
+
+	/** Whether this provider is currently active in YAML */
+	active: integer('active', { mode: 'boolean' }).notNull().default(true),
 })
 export const vendorModelVersionsRelation = relations(providers, ({ many }) => ({
 	/** All model versions by this vendor */

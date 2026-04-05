@@ -1,0 +1,10 @@
+code: claude-3-opus
+provider: vertex_anthropic
+providerModelCode: claude-3-opus-20240229
+costs:
+  - costPerCall: 0
+    costPerPromptToken: 0.000015
+    costPerCompletionToken: 0.000075
+    costPerHour: 0
+    currency: USD
+    validFrom: 2024-02-29

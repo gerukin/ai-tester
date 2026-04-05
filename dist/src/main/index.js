@@ -5,4 +5,5 @@ import { runAllEvaluations } from './evaluations.js';
 import { showStats } from './stats.js';
 import { updateStructuredObjectsInDb } from './structured-objects.js';
 import { updateToolsInDb } from './tools.js';
-export { updatePromptsInDb, updateTestsInDb, runAllTests, runAllEvaluations, showStats, updateStructuredObjectsInDb, updateToolsInDb, };
+import { updateProvidersInDb } from './providers.js';
+export { updatePromptsInDb, updateTestsInDb, runAllTests, runAllEvaluations, showStats, updateStructuredObjectsInDb, updateToolsInDb, updateProvidersInDb, };

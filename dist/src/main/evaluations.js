@@ -4,11 +4,11 @@
 import { and, or, eq, ne, inArray, sql, lt, countDistinct, aliasedTable } from 'drizzle-orm';
 import { generateObject } from 'ai';
 import z from 'zod';
-import { testsConfig, envConfig } from '../config/index.js';
+import { resolveTestsConfig, envConfig } from '../config/index.js';
 import { db } from '../database/db.js';
 import { schema } from '../database/schema.js';
 import { askYesNo } from '../utils/menus.js';
-import { providers as llmProviders, wrapModel } from '../llms/index.js';
+import { getProvider, wrapModel } from '../llms/index.js';
 import { getSectionsFromMarkdownContent, sectionsToAiMessages } from '../utils/markdown.js';
 import { logModelError } from '../utils/errors.js';
 import { state } from '../utils/state.js';
@@ -23,10 +23,19 @@ const evalSchema = z.object({
         .describe("A boolean value indicating whether the AI candidate's response is as expected in the evaluation instructions."),
 });
 export const runAllEvaluations = async () => {
+    const testsConfig = resolveTestsConfig();
     state.startRun();
     console.log('Checking for evaluations to run...');
+    if (testsConfig.candidates.length === 0) {
+        console.log('⚠️ No active candidate models are configured.');
+        return;
+    }
+    if (testsConfig.evaluators.length === 0) {
+        console.log('⚠️ No active evaluator models are configured.');
+        return;
+    }
     // we query the DB to get all missing evaluations not yet run
-    const { testVersions, prompts, testToTagRels, testEvaluationInstructionsVersions, testToEvaluationInstructionsRels, tags, sessions, modelVersions, providers, promptVersions, sessionEvaluations, } = schema;
+    const { testVersions, prompts, testToTagRels, testEvaluationInstructionsVersions, testToEvaluationInstructionsRels, tags, sessions, modelVersions, providers, models, promptVersions, sessionEvaluations, } = schema;
     const modelConfigsWithTemperature = testsConfig.evaluators.filter(evaluator => evaluator.temperature !== undefined);
     const modelsWithTemperatures = new Map(modelConfigsWithTemperature.map(({ provider, model, temperature }) => [`${provider}:${model}`, temperature]));
     const modelConfigsWithTags = testsConfig.evaluators.filter(candidate => candidate.requiredTags !== undefined && candidate.requiredTags.length > 0);
@@ -36,6 +45,8 @@ export const runAllEvaluations = async () => {
     const candidateModelConfigsWithProhibitedTags = testsConfig.candidates.filter(candidate => candidate.prohibitedTags !== undefined && candidate.prohibitedTags.length > 0);
     const candidateModelVersionAlias = aliasedTable(modelVersions, 'candidate_model_version_alias');
     const candidateProviderAlias = aliasedTable(providers, 'candidate_provider_alias');
+    const candidateModelAlias = aliasedTable(models, 'candidate_model_alias');
+    const evaluatorModelAlias = aliasedTable(models, 'evaluator_model_alias');
     const testSysPromptAlias = aliasedTable(promptVersions, 'test_sys_prompt_alias');
     const missingEvaluations = await db
         .select({
@@ -53,7 +64,8 @@ export const runAllEvaluations = async () => {
         evaluationsCount: countDistinct(sessionEvaluations.id),
     })
         .from(modelVersions)
-        .innerJoin(providers, and(eq(providers.id, modelVersions.providerId), or(...testsConfig.evaluators.map(({ provider, model }) => and(eq(providers.code, provider), eq(modelVersions.providerModelCode, model))))))
+        .innerJoin(evaluatorModelAlias, and(eq(evaluatorModelAlias.id, modelVersions.modelId), eq(evaluatorModelAlias.active, true), eq(modelVersions.active, true)))
+        .innerJoin(providers, and(eq(providers.id, modelVersions.providerId), eq(providers.active, true), or(...testsConfig.evaluators.map(({ provider, model }) => and(eq(providers.code, provider), eq(modelVersions.providerModelCode, model))))))
         // always true to fetch all possible session combinations (we will filter later - cross joins aren't supported in drizzle-orm as of now)
         .innerJoin(sessions, and(eq(sessions.id, sessions.id), candidateModelConfigsWithTemperature.length > 0
         ? sql `${sessions.temperature} = CASE
@@ -65,7 +77,8 @@ export const runAllEvaluations = async () => {
 						END`
         : eq(sessions.temperature, testsConfig.candidatesTemperature)))
         .innerJoin(candidateModelVersionAlias, eq(candidateModelVersionAlias.id, sessions.modelVersionId))
-        .innerJoin(candidateProviderAlias, and(eq(candidateProviderAlias.id, candidateModelVersionAlias.providerId), or(...testsConfig.candidates.map(({ provider, model }) => and(eq(candidateProviderAlias.code, provider), eq(candidateModelVersionAlias.providerModelCode, model))))))
+        .innerJoin(candidateModelAlias, and(eq(candidateModelAlias.id, candidateModelVersionAlias.modelId), eq(candidateModelAlias.active, true), eq(candidateModelVersionAlias.active, true)))
+        .innerJoin(candidateProviderAlias, and(eq(candidateProviderAlias.id, candidateModelVersionAlias.providerId), eq(candidateProviderAlias.active, true), or(...testsConfig.candidates.map(({ provider, model }) => and(eq(candidateProviderAlias.code, provider), eq(candidateModelVersionAlias.providerModelCode, model))))))
         .innerJoin(prompts, eq(prompts.code, '_evaluator_default'))
         .innerJoin(promptVersions, and(eq(promptVersions.promptId, prompts.id), eq(promptVersions.active, true)))
         // we add the evaluation prompt version to the query
@@ -136,7 +149,7 @@ export const runAllEvaluations = async () => {
     // For each missing test, we will run the test
     let i = 1;
     for (const evaluation of missingEvaluations) {
-        const provider = llmProviders[evaluation.providerCode];
+        const provider = getProvider(evaluation.providerCode);
         if (!provider)
             throw new Error(`Provider ${evaluation.providerCode} not found`);
         const model = wrapModel(provider(evaluation.modelVersionCode), 'evaluator');

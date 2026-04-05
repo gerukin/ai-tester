@@ -9,6 +9,14 @@ const LOCALE = navigator.language ?? 'en-US';
 const EXTRA_FRACTION_DIGITS = 2;
 export const showStats = async (query) => {
     console.log('Checking for stats...');
+    if (query.candidates && query.candidates.length === 0) {
+        console.log(`⚠️ Query "${query.description}" has no active candidate models.`);
+        return;
+    }
+    if (query.evaluators && query.evaluators.length === 0) {
+        console.log(`⚠️ Query "${query.description}" has no active evaluator models.`);
+        return;
+    }
     const candidateModelConfigsWithTemperature = query.candidates?.filter(candidate => candidate.temperature !== undefined) ?? [];
     const modelConfigsWithTags = query.candidates?.filter(candidate => candidate.requiredTags !== undefined && candidate.requiredTags.length > 0) ??
         [];
@@ -18,9 +26,11 @@ export const showStats = async (query) => {
         [];
     const evaluatorModelConfigsWithProhibitedTags = query.evaluators?.filter(evaluator => evaluator.prohibitedTags !== undefined && evaluator.prohibitedTags.length > 0) ?? [];
     // we query the DB to get all missing tests not yet run
-    const { testVersions, testToTagRels, tags, sessions, modelVersions, providers, currencies, currencyRates, modelCosts, } = schema;
+    const { testVersions, testToTagRels, tags, sessions, models, modelVersions, providers, currencies, currencyRates, modelCosts, } = schema;
     const targetCurrencyAlias = aliasedTable(currencies, 'target_currency_alias');
+    const candidateModelAlias = aliasedTable(models, 'candidate_model_alias');
     const evaluatorModelVersionAlias = aliasedTable(modelVersions, 'evaluator_model_version_alias');
+    const evaluatorModelAlias = aliasedTable(models, 'evaluator_model_alias');
     const evaluatorProviderAlias = aliasedTable(providers, 'evaluator_provider_alias');
     const cte = db.$with('cte').as(db
         .select({
@@ -51,10 +61,20 @@ export const showStats = async (query) => {
 							ELSE ${query.evaluatorsTemperature ?? sessionEvaluations.temperature}
 						END`
         : eq(sessionEvaluations.temperature, query.evaluatorsTemperature ?? sessionEvaluations.temperature)))
-        .innerJoin(modelVersions, and(eq(sessions.modelVersionId, modelVersions.id), or(...(query.candidates?.map(({ provider, model }) => and(eq(providers.code, provider), eq(modelVersions.providerModelCode, model))) ?? []))))
-        .innerJoin(evaluatorModelVersionAlias, and(eq(sessionEvaluations.modelVersionId, evaluatorModelVersionAlias.id), or(...(query.evaluators?.map(({ provider, model }) => and(eq(evaluatorProviderAlias.code, provider), eq(evaluatorModelVersionAlias.providerModelCode, model))) ?? []))))
-        .innerJoin(providers, eq(providers.id, modelVersions.providerId))
-        .innerJoin(evaluatorProviderAlias, eq(evaluatorProviderAlias.id, evaluatorModelVersionAlias.providerId))
+        .innerJoin(modelVersions, and(eq(sessions.modelVersionId, modelVersions.id), eq(modelVersions.active, true), ...(query.candidates
+        ? [
+            or(...query.candidates.map(({ provider, model }) => and(eq(providers.code, provider), eq(modelVersions.providerModelCode, model)))),
+        ]
+        : [])))
+        .innerJoin(candidateModelAlias, and(eq(candidateModelAlias.id, modelVersions.modelId), eq(candidateModelAlias.active, true)))
+        .innerJoin(evaluatorModelVersionAlias, and(eq(sessionEvaluations.modelVersionId, evaluatorModelVersionAlias.id), eq(evaluatorModelVersionAlias.active, true), ...(query.evaluators
+        ? [
+            or(...query.evaluators.map(({ provider, model }) => and(eq(evaluatorProviderAlias.code, provider), eq(evaluatorModelVersionAlias.providerModelCode, model)))),
+        ]
+        : [])))
+        .innerJoin(providers, and(eq(providers.id, modelVersions.providerId), eq(providers.active, true)))
+        .innerJoin(evaluatorModelAlias, and(eq(evaluatorModelAlias.id, evaluatorModelVersionAlias.modelId), eq(evaluatorModelAlias.active, true)))
+        .innerJoin(evaluatorProviderAlias, and(eq(evaluatorProviderAlias.id, evaluatorModelVersionAlias.providerId), eq(evaluatorProviderAlias.active, true)))
         // .innerJoin(modelCosts, eq(modelCosts.modelVersionId, modelVersions.id))
         // .innerJoin(currencies, eq(currencies.id, modelCosts.currencyId))
         .innerJoin(testVersions, and(eq(testVersions.id, sessions.testVersionId), eq(testVersions.active, true)))
