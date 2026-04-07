@@ -4,7 +4,7 @@
 import { and, or, eq, ne, inArray, sql, lt, countDistinct, aliasedTable } from 'drizzle-orm';
 import { generateObject } from 'ai';
 import z from 'zod';
-import { resolveTestsConfig, envConfig } from '../config/index.js';
+import { resolveTestsConfig, envConfig, getFileBackedModelRegistry } from '../config/index.js';
 import { db } from '../database/db.js';
 import { schema } from '../database/schema.js';
 import { askYesNo } from '../utils/menus.js';
@@ -24,6 +24,7 @@ const evalSchema = z.object({
 });
 export const runAllEvaluations = async () => {
     const testsConfig = resolveTestsConfig();
+    const registry = getFileBackedModelRegistry();
     state.startRun();
     console.log('Checking for evaluations to run...');
     if (testsConfig.candidates.length === 0) {
@@ -152,7 +153,8 @@ export const runAllEvaluations = async () => {
         const provider = getProvider(evaluation.providerCode);
         if (!provider)
             throw new Error(`Provider ${evaluation.providerCode} not found`);
-        const model = wrapModel(provider(evaluation.modelVersionCode), 'evaluator');
+        const modelDefinition = registry.modelsByReference.get(`${evaluation.providerCode}:${evaluation.modelVersionCode}`);
+        const model = wrapModel(provider(evaluation.modelVersionCode), 'evaluator', modelDefinition);
         const temperature = modelsWithTemperatures.get(`${evaluation.providerCode}:${evaluation.modelVersionCode}`) ??
             testsConfig.evaluatorsTemperature;
         // We extract the array of messages

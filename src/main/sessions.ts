@@ -13,7 +13,7 @@ import {
 } from 'ai'
 import type { z } from 'zod'
 
-import { envConfig, resolveTestsConfig } from '../config/index.js'
+import { envConfig, getFileBackedModelRegistry, resolveTestsConfig } from '../config/index.js'
 import { db } from '../database/db.js'
 import { schema } from '../database/schema.js'
 import { askYesNo } from '../utils/menus.js'
@@ -37,6 +37,7 @@ const logSkippedTests = (attempts: number, attempt: number) => {
 
 export const runAllTests = async () => {
 	const testsConfig = resolveTestsConfig()
+	const registry = getFileBackedModelRegistry()
 	state.startRun()
 	console.log('Checking for tests to run...')
 
@@ -219,10 +220,11 @@ export const runAllTests = async () => {
 
 	// For each missing test, we will run the test
 	let i = 1
-	for (const test of missingTests) {
-		const provider = getProvider(test.providerCode)
-		if (!provider) throw new Error(`Provider ${test.providerCode} not found`)
-		const model = wrapModel(provider(test.modelVersionCode), 'candidate')
+		for (const test of missingTests) {
+			const provider = getProvider(test.providerCode)
+			if (!provider) throw new Error(`Provider ${test.providerCode} not found`)
+			const modelDefinition = registry.modelsByReference.get(`${test.providerCode}:${test.modelVersionCode}`)
+			const model = wrapModel(provider(test.modelVersionCode), 'candidate', modelDefinition)
 
 		const temperature =
 			modelsWithTemperatures.get(`${test.providerCode}:${test.modelVersionCode}`) ?? testsConfig.candidatesTemperature

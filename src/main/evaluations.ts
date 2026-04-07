@@ -6,7 +6,7 @@ import { and, or, eq, ne, inArray, sql, lt, countDistinct, aliasedTable } from '
 import { generateObject, type GenerateObjectResult } from 'ai'
 import z from 'zod'
 
-import { resolveTestsConfig, envConfig } from '../config/index.js'
+import { resolveTestsConfig, envConfig, getFileBackedModelRegistry } from '../config/index.js'
 import { db } from '../database/db.js'
 import { schema } from '../database/schema.js'
 import { askYesNo } from '../utils/menus.js'
@@ -34,6 +34,7 @@ type EvalSchema = z.infer<typeof evalSchema>
 
 export const runAllEvaluations = async () => {
 	const testsConfig = resolveTestsConfig()
+	const registry = getFileBackedModelRegistry()
 	state.startRun()
 	console.log('Checking for evaluations to run...')
 
@@ -307,10 +308,11 @@ export const runAllEvaluations = async () => {
 
 	// For each missing test, we will run the test
 	let i = 1
-	for (const evaluation of missingEvaluations) {
-		const provider = getProvider(evaluation.providerCode)
-		if (!provider) throw new Error(`Provider ${evaluation.providerCode} not found`)
-		const model = wrapModel(provider(evaluation.modelVersionCode), 'evaluator')
+		for (const evaluation of missingEvaluations) {
+			const provider = getProvider(evaluation.providerCode)
+			if (!provider) throw new Error(`Provider ${evaluation.providerCode} not found`)
+			const modelDefinition = registry.modelsByReference.get(`${evaluation.providerCode}:${evaluation.modelVersionCode}`)
+			const model = wrapModel(provider(evaluation.modelVersionCode), 'evaluator', modelDefinition)
 
 		const temperature =
 			modelsWithTemperatures.get(`${evaluation.providerCode}:${evaluation.modelVersionCode}`) ??

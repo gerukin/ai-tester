@@ -3,6 +3,7 @@ import { parse } from 'yaml';
 import { z } from 'zod';
 import { envConfig } from './environment.js';
 import { listAllYamlFiles } from '../utils/files.js';
+import { stableJsonStringify } from '../utils/json.js';
 const ProviderTypeSchema = z.enum([
     'ollama',
     'openai',
@@ -36,6 +37,20 @@ export const CostDefinitionSchema = z.object({
     currency: z.string().min(3).max(3).toUpperCase(),
     validFrom: z.string(),
 });
+const JsonValueSchema = z.lazy(() => z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(JsonValueSchema), z.record(JsonValueSchema)]));
+const ThinkingConfigSchema = z
+    .object({
+    enabled: z.boolean().optional(),
+    effort: z.enum(['low', 'medium', 'high']).optional(),
+    budgetTokens: z.number().int().positive().optional(),
+    includeThoughts: z.boolean().optional(),
+    extractionTagName: z.string().min(1).optional(),
+})
+    .optional();
+const RuntimeOptionsOverrideSchema = z.object({
+    providerOptions: z.record(JsonValueSchema).optional(),
+    thinking: ThinkingConfigSchema,
+});
 export const ModelDefinitionSchema = z.object({
     code: z.string(),
     provider: z.string(),
@@ -47,6 +62,10 @@ export const ModelDefinitionSchema = z.object({
         return normalized === '' ? undefined : normalized;
     }, z.string().optional()),
     active: z.boolean().default(true),
+    providerOptions: z.record(JsonValueSchema).default({}),
+    thinking: ThinkingConfigSchema,
+    candidateOverrides: RuntimeOptionsOverrideSchema.optional(),
+    evaluatorOverrides: RuntimeOptionsOverrideSchema.optional(),
     costs: z
         .array(CostDefinitionSchema)
         .default([])
@@ -80,7 +99,46 @@ const readYamlFile = (filePath, schema) => {
     return schema.parse(parse(content));
 };
 const getModelReferenceKey = (model) => `${model.provider}:${model.providerModelCode}`;
-const getModelIdentityKey = (model) => `${model.provider}:${model.providerModelCode}:${model.extraIdentifier ?? ''}`;
+export const getModelRuntimeOptions = (model) => ({
+    providerOptions: model.providerOptions,
+    thinking: model.thinking ?? null,
+});
+export const getRoleAwareModelRuntimeOptions = (model) => ({
+    ...getModelRuntimeOptions(model),
+    ...(model.candidateOverrides !== undefined
+        ? {
+            candidateOverrides: {
+                providerOptions: model.candidateOverrides.providerOptions ?? {},
+                thinking: model.candidateOverrides.thinking ?? null,
+            },
+        }
+        : {}),
+    ...(model.evaluatorOverrides !== undefined
+        ? {
+            evaluatorOverrides: {
+                providerOptions: model.evaluatorOverrides.providerOptions ?? {},
+                thinking: model.evaluatorOverrides.thinking ?? null,
+            },
+        }
+        : {}),
+});
+export const getEffectiveModelRuntimeOptions = (model, type) => {
+    const overrides = type === 'candidate' ? model.candidateOverrides : model.evaluatorOverrides;
+    return {
+        providerOptions: {
+            ...(model.providerOptions ?? {}),
+            ...(overrides?.providerOptions ?? {}),
+        },
+        thinking: model.thinking !== undefined || overrides?.thinking !== undefined
+            ? {
+                ...(model.thinking ?? {}),
+                ...(overrides?.thinking ?? {}),
+            }
+            : undefined,
+    };
+};
+export const getModelRuntimeOptionsJson = (model) => stableJsonStringify(getRoleAwareModelRuntimeOptions(model));
+const getModelIdentityKey = (model) => `${model.provider}:${model.providerModelCode}:${model.extraIdentifier ?? ''}:${getModelRuntimeOptionsJson(model)}`;
 const getActiveModels = (models) => {
     const groupedModels = new Map();
     for (const model of models) {

@@ -2,84 +2,63 @@ import { type LanguageModel, type LanguageModelV1Middleware } from 'ai'
 import { wrapLanguageModel, extractReasoningMiddleware } from 'ai'
 
 import { addProviderSpecificProps } from './middlewares/add-provider-specific-props.js'
-import {
-	MAX_TEST_REASONING_EFFORT,
-	MAX_EVALUATION_REASONING_EFFORT,
-} from '../../config/index.js'
-import { envConfig } from '../../config/environment.js'
+import { getEffectiveModelRuntimeOptions, type ModelDefinition } from '../../config/model-registry.js'
 
 type ModelType = 'candidate' | 'evaluator'
 
-const providerModelRules: Record<
-	string,
-	{ type?: ModelType; matchRegex: RegExp; middlewares: LanguageModelV1Middleware[] }[]
-> = {
-	'ollama.chat': [
-		{
-			matchRegex: /.*/, // matches all models (no need to specifically exclude non thinking models)
-			middlewares: [extractReasoningMiddleware({ tagName: 'think' })],
-		},
-	],
-	vertex: [
-		{
-			type: 'evaluator',
-			matchRegex: /^gemini-2\.5.*/, // ex: gemini-2.5-flash
-			middlewares: [
-				addProviderSpecificProps('vertex', {
-					thinkingConfig: { includeThoughts: true, thinkingBudget: envConfig.MAX_EVALUATION_THINKING_TOKENS },
-				}),
-			],
-		},
-		{
-			type: 'candidate',
-			matchRegex: /^gemini-2\.5.*/, // ex: gemini-2.5-flash
-			middlewares: [
-				addProviderSpecificProps('vertex', {
-					thinkingConfig: { includeThoughts: true, thinkingBudget: envConfig.MAX_TEST_THINKING_TOKENS },
-				}),
-			],
-		},
-	],
-	anthropic: [
-		{
-			type: 'evaluator',
-			matchRegex: /^claude-(3\.7|4).*/, // ex: claude-3.7 or claude-4
-			middlewares: [
-				addProviderSpecificProps('anthropic', {
-					thinking: { type: 'enabled', budgetTokens: envConfig.MAX_EVALUATION_THINKING_TOKENS },
-				}),
-			],
-		},
-		{
-			type: 'candidate',
-			matchRegex: /^claude-(3\.7|4).*/, // ex: claude-3.7 or claude-4
-			middlewares: [
-				addProviderSpecificProps('anthropic', {
-					thinking: { type: 'enabled', budgetTokens: envConfig.MAX_TEST_THINKING_TOKENS },
-				}),
-			],
-		},
-	],
-	openai: [
-		{
-			type: 'evaluator',
-			matchRegex: /^(o3-|o4-).*/, // ex: o3 or o4-mini
-			middlewares: [
-				addProviderSpecificProps('openai', {
-					reasoningEffort: MAX_EVALUATION_REASONING_EFFORT,
-				}),
-			],
-		},
-		{
-			type: 'candidate',
-			matchRegex: /^(o3-|o4-).*/, // ex: o3 or o4-mini
-			middlewares: [
-				addProviderSpecificProps('openai', {
-					reasoningEffort: MAX_TEST_REASONING_EFFORT,
-				}),
-			],
-		},
-	],
+const buildPerModelMiddlewares = (
+	model: LanguageModel,
+	modelConfig: Pick<ModelDefinition, 'providerOptions' | 'thinking' | 'candidateOverrides' | 'evaluatorOverrides'>,
+	type: ModelType
+): LanguageModelV1Middleware[] => {
+	const middlewares: LanguageModelV1Middleware[] = []
+	const providerMetadataKey = model.provider.split('.')[0]?.trim()
+	const { providerOptions, thinking } = getEffectiveModelRuntimeOptions(modelConfig, type)
+
+	if (model.provider === 'ollama.chat') {
+		if (thinking !== undefined && thinking.enabled !== false) {
+			middlewares.push(extractReasoningMiddleware({ tagName: thinking?.extractionTagName ?? 'think' }))
+		}
+	}
+
+	if (!providerMetadataKey) return middlewares
+
+	const props: Record<string, unknown> = { ...providerOptions }
+
+	switch (providerMetadataKey) {
+		case 'vertex': {
+			if (thinking !== undefined && (thinking.budgetTokens !== undefined || thinking.includeThoughts !== undefined)) {
+				props['thinkingConfig'] = {
+					...(thinking.includeThoughts !== undefined ? { includeThoughts: thinking.includeThoughts } : {}),
+					...(thinking.budgetTokens !== undefined ? { thinkingBudget: thinking.budgetTokens } : {}),
+				}
+			}
+			break
+		}
+		case 'anthropic': {
+			if (thinking?.enabled === false) {
+				props['thinking'] = { type: 'disabled' }
+			} else if (thinking?.enabled === true) {
+				props['thinking'] = {
+					type: 'enabled',
+					...(thinking.budgetTokens !== undefined ? { budgetTokens: thinking.budgetTokens } : {}),
+				}
+			}
+			break
+		}
+		default: {
+			if (thinking?.effort !== undefined) {
+				props['reasoningEffort'] = thinking.effort
+			}
+			break
+		}
+	}
+
+	if (Object.keys(props).length > 0) {
+		middlewares.push(addProviderSpecificProps(providerMetadataKey, props))
+	}
+
+	return middlewares
 }
 
 /**
@@ -87,14 +66,16 @@ const providerModelRules: Record<
  * @param model The model to optionally wrap
  * @returns Wrapped model with applied middlewares, or the original model if no middlewares are needed
  */
-export const wrapModel = (model: LanguageModel, type: ModelType) => {
-	const providerRules = providerModelRules[model.provider as keyof typeof providerModelRules] ?? []
+export const wrapModel = (
+	model: LanguageModel,
+	type: ModelType,
+	modelConfig?: Pick<ModelDefinition, 'providerOptions' | 'thinking' | 'candidateOverrides' | 'evaluatorOverrides'>
+) => {
+	if (modelConfig === undefined) return model
 
-	for (const rule of providerRules) {
-		if (rule.matchRegex.test(model.modelId) && (!rule.type || rule.type === type)) {
-			return wrapLanguageModel({ model, middleware: rule.middlewares })
-		}
+	const middlewares = buildPerModelMiddlewares(model, modelConfig, type)
+	if (middlewares.length > 0) {
+		return wrapLanguageModel({ model, middleware: middlewares })
 	}
-
 	return model
 }

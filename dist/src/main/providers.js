@@ -4,8 +4,8 @@ import { providers } from '../database/schema/providers.js';
 import { models, modelVersions } from '../database/schema/models.js';
 import { currencies, modelCosts } from '../database/schema/costs.js';
 import { sessionEvaluations, sessions } from '../database/schema/sessions.js';
-import { clearFileBackedModelRegistryCache, loadFileBackedModelRegistry, } from '../config/model-registry.js';
-const getModelIdentityKey = (model) => `${model.provider}:${model.providerModelCode}:${model.extraIdentifier ?? ''}`;
+import { clearFileBackedModelRegistryCache, getModelRuntimeOptionsJson, loadFileBackedModelRegistry, } from '../config/model-registry.js';
+const getModelIdentityKey = (model) => `${model.provider}:${model.providerModelCode}:${model.extraIdentifier ?? ''}:${getModelRuntimeOptionsJson(model)}`;
 const setActiveByIds = async (tx, table, ids) => {
     await tx.update(table).set({ active: false });
     if (ids.length > 0) {
@@ -152,7 +152,7 @@ const upsertModel = async (tx, modelConfig) => {
 };
 const upsertModelVersion = async (tx, providerId, modelId, modelConfig) => {
     let modelVersion = await tx.query.modelVersions.findFirst({
-        where: and(eq(modelVersions.providerId, providerId), eq(modelVersions.providerModelCode, modelConfig.providerModelCode), modelConfig.extraIdentifier
+        where: and(eq(modelVersions.providerId, providerId), eq(modelVersions.providerModelCode, modelConfig.providerModelCode), eq(modelVersions.runtimeOptionsJson, getModelRuntimeOptionsJson(modelConfig)), modelConfig.extraIdentifier
             ? eq(modelVersions.extraIdentifier, modelConfig.extraIdentifier)
             : isNull(modelVersions.extraIdentifier)),
     });
@@ -174,6 +174,7 @@ const upsertModelVersion = async (tx, providerId, modelId, modelConfig) => {
             providerId,
             providerModelCode: modelConfig.providerModelCode,
             extraIdentifier: modelConfig.extraIdentifier,
+            runtimeOptionsJson: getModelRuntimeOptionsJson(modelConfig),
             active: true,
         })
             .returning();

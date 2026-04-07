@@ -1,6 +1,10 @@
 code: gpt-4o-mini
 provider: openai
 providerModelCode: gpt-4o-mini-2024-07-18
+thinking:
+  effort: low
+providerOptions:
+  serviceTier: auto
 costs:
   - costPerCall: 0
     costPerPromptToken: 0.00000015

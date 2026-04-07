@@ -2,6 +2,7 @@ import { text, integer, sqliteTable, unique } from 'drizzle-orm/sqlite-core'
 import { sql, relations } from 'drizzle-orm'
 
 import { providers } from './providers.js'
+import { EMPTY_MODEL_RUNTIME_OPTIONS_JSON } from '../../utils/json.js'
 
 export const models = sqliteTable('models', {
 	id: integer('id').primaryKey(),
@@ -24,7 +25,7 @@ export const modelRelations = relations(models, ({ many }) => ({
 export const modelVersions = sqliteTable(
 	'model_versions',
 	{
-		id: integer('id').primaryKey(),
+			id: integer('id').primaryKey(),
 
 		modelId: integer('model_id')
 			.notNull()
@@ -34,20 +35,23 @@ export const modelVersions = sqliteTable(
 			.references(() => providers.id, { onUpdate: 'cascade', onDelete: 'cascade' }),
 		providerModelCode: text('provider_model_code').notNull(),
 
-		// This could be anything the provider uses to identify the model beyond the code (ex: a `digest` in Ollama)
-		extraIdentifier: text('extra_identifier'),
+			// This could be anything the provider uses to identify the model beyond the code (ex: a `digest` in Ollama)
+			extraIdentifier: text('extra_identifier'),
 
-		/** Whether this provider model version is currently active in YAML */
-		active: integer('active', { mode: 'boolean' }).notNull().default(true),
+			/** Canonical JSON for runtime options sourced from YAML (provider options, thinking config, etc.) */
+			runtimeOptionsJson: text('runtime_options_json').notNull().default(EMPTY_MODEL_RUNTIME_OPTIONS_JSON),
+
+			/** Whether this provider model version is currently active in YAML */
+			active: integer('active', { mode: 'boolean' }).notNull().default(true),
 
 		createdAt: integer('created_at', { mode: 'timestamp' })
 			.notNull()
 			.default(sql`(strftime('%s', 'now'))`),
-	},
-	t => [
-		unique().on(t.providerId, t.providerModelCode, t.extraIdentifier),
-	]
-)
+		},
+		t => [
+			unique().on(t.providerId, t.providerModelCode, t.extraIdentifier, t.runtimeOptionsJson),
+		]
+	)
 export const modelVersionRelations = relations(modelVersions, ({ one }) => ({
 	/** The model this version belongs to */
 	model: one(models, {

@@ -1,0 +1,3 @@
+DROP INDEX `model_versions_provider_id_provider_model_code_extra_identifier_unique`;--> statement-breakpoint
+ALTER TABLE `model_versions` ADD `runtime_options_json` text DEFAULT '{"providerOptions":{},"thinking":null}' NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX `model_versions_provider_id_provider_model_code_extra_identifier_runtime_options_json_unique` ON `model_versions` (`provider_id`,`provider_model_code`,`extra_identifier`,`runtime_options_json`);

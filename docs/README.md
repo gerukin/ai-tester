@@ -65,5 +65,7 @@ npm update @gerukin/ai-tester
 
 Breaking changes will be noted in the [changelog](/CHANGELOG.md).
 
+Version-specific migration steps live under [migration-guides/](migration-guides/).
+
 > [!WARNING]
 > After an update (even if non breaking), you MUST run the [migrations](#database-migrations) again. This is currently not handled automatically.

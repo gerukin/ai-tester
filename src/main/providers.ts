@@ -7,6 +7,7 @@ import { currencies, modelCosts } from '../database/schema/costs.js'
 import { sessionEvaluations, sessions } from '../database/schema/sessions.js'
 import {
 	clearFileBackedModelRegistryCache,
+	getModelRuntimeOptionsJson,
 	loadFileBackedModelRegistry,
 	type FileBackedModelRegistry,
 	type ModelDefinition,
@@ -15,8 +16,9 @@ import {
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0]
 
-const getModelIdentityKey = (model: Pick<ModelDefinition, 'provider' | 'providerModelCode' | 'extraIdentifier'>) =>
-	`${model.provider}:${model.providerModelCode}:${model.extraIdentifier ?? ''}`
+const getModelIdentityKey = (
+	model: Pick<ModelDefinition, 'provider' | 'providerModelCode' | 'extraIdentifier' | 'providerOptions' | 'thinking'>
+) => `${model.provider}:${model.providerModelCode}:${model.extraIdentifier ?? ''}:${getModelRuntimeOptionsJson(model)}`
 
 const setActiveByIds = async (tx: Transaction, table: typeof providers | typeof models | typeof modelVersions, ids: number[]) => {
 	await tx.update(table).set({ active: false })
@@ -191,11 +193,12 @@ const upsertModelVersion = async (
 ) => {
 	let modelVersion = await tx.query.modelVersions.findFirst({
 		where: and(
-			eq(modelVersions.providerId, providerId),
-			eq(modelVersions.providerModelCode, modelConfig.providerModelCode),
-			modelConfig.extraIdentifier
-				? eq(modelVersions.extraIdentifier, modelConfig.extraIdentifier)
-				: isNull(modelVersions.extraIdentifier)
+				eq(modelVersions.providerId, providerId),
+				eq(modelVersions.providerModelCode, modelConfig.providerModelCode),
+				eq(modelVersions.runtimeOptionsJson, getModelRuntimeOptionsJson(modelConfig)),
+				modelConfig.extraIdentifier
+					? eq(modelVersions.extraIdentifier, modelConfig.extraIdentifier)
+					: isNull(modelVersions.extraIdentifier)
 		),
 	})
 
@@ -211,13 +214,14 @@ const upsertModelVersion = async (
 	} else {
 		const [inserted] = await tx
 			.insert(modelVersions)
-			.values({
-				modelId,
-				providerId,
-				providerModelCode: modelConfig.providerModelCode,
-				extraIdentifier: modelConfig.extraIdentifier,
-				active: true,
-			})
+				.values({
+					modelId,
+					providerId,
+					providerModelCode: modelConfig.providerModelCode,
+					extraIdentifier: modelConfig.extraIdentifier,
+					runtimeOptionsJson: getModelRuntimeOptionsJson(modelConfig),
+					active: true,
+				})
 			.returning()
 		modelVersion = inserted
 	}

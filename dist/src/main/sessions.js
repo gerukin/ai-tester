@@ -3,7 +3,7 @@
  */
 import { and, or, eq, ne, inArray, sql, lt, countDistinct } from 'drizzle-orm';
 import { generateText, generateObject, jsonSchema, } from 'ai';
-import { envConfig, resolveTestsConfig } from '../config/index.js';
+import { envConfig, getFileBackedModelRegistry, resolveTestsConfig } from '../config/index.js';
 import { db } from '../database/db.js';
 import { schema } from '../database/schema.js';
 import { askYesNo } from '../utils/menus.js';
@@ -26,6 +26,7 @@ const logSkippedTests = (attempts, attempt) => {
 };
 export const runAllTests = async () => {
     const testsConfig = resolveTestsConfig();
+    const registry = getFileBackedModelRegistry();
     state.startRun();
     console.log('Checking for tests to run...');
     if (testsConfig.candidates.length === 0) {
@@ -129,7 +130,8 @@ export const runAllTests = async () => {
         const provider = getProvider(test.providerCode);
         if (!provider)
             throw new Error(`Provider ${test.providerCode} not found`);
-        const model = wrapModel(provider(test.modelVersionCode), 'candidate');
+        const modelDefinition = registry.modelsByReference.get(`${test.providerCode}:${test.modelVersionCode}`);
+        const model = wrapModel(provider(test.modelVersionCode), 'candidate', modelDefinition);
         const temperature = modelsWithTemperatures.get(`${test.providerCode}:${test.modelVersionCode}`) ?? testsConfig.candidatesTemperature;
         // We extract the array of messages
         const sections = getSectionsFromMarkdownContent(test.testContent);

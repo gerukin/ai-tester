@@ -4,6 +4,7 @@ import { z } from 'zod'
 
 import { envConfig } from './environment.js'
 import { listAllYamlFiles } from '../utils/files.js'
+import { stableJsonStringify } from '../utils/json.js'
 
 const ProviderTypeSchema = z.enum([
 	'ollama',
@@ -46,6 +47,27 @@ export const CostDefinitionSchema = z.object({
 })
 export type CostDefinition = z.infer<typeof CostDefinitionSchema>
 
+const JsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
+	z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(JsonValueSchema), z.record(JsonValueSchema)])
+)
+
+const ThinkingConfigSchema = z
+	.object({
+		enabled: z.boolean().optional(),
+		effort: z.enum(['low', 'medium', 'high']).optional(),
+		budgetTokens: z.number().int().positive().optional(),
+		includeThoughts: z.boolean().optional(),
+		extractionTagName: z.string().min(1).optional(),
+	})
+	.optional()
+export type ThinkingConfig = z.infer<typeof ThinkingConfigSchema>
+
+const RuntimeOptionsOverrideSchema = z.object({
+	providerOptions: z.record(JsonValueSchema).optional(),
+	thinking: ThinkingConfigSchema,
+})
+export type RuntimeOptionsOverride = z.infer<typeof RuntimeOptionsOverrideSchema>
+
 export const ModelDefinitionSchema = z.object({
 	code: z.string(),
 	provider: z.string(),
@@ -59,6 +81,10 @@ export const ModelDefinitionSchema = z.object({
 		z.string().optional()
 	),
 	active: z.boolean().default(true),
+	providerOptions: z.record(JsonValueSchema).default({}),
+	thinking: ThinkingConfigSchema,
+	candidateOverrides: RuntimeOptionsOverrideSchema.optional(),
+	evaluatorOverrides: RuntimeOptionsOverrideSchema.optional(),
 	costs: z
 		.array(CostDefinitionSchema)
 		.default([])
@@ -107,8 +133,69 @@ const readYamlFile = <T>(filePath: string, schema: z.ZodType<T, z.ZodTypeDef, un
 const getModelReferenceKey = (model: Pick<ModelDefinition, 'provider' | 'providerModelCode'>) =>
 	`${model.provider}:${model.providerModelCode}`
 
-const getModelIdentityKey = (model: Pick<ModelDefinition, 'provider' | 'providerModelCode' | 'extraIdentifier'>) =>
-	`${model.provider}:${model.providerModelCode}:${model.extraIdentifier ?? ''}`
+export const getModelRuntimeOptions = (model: Pick<ModelDefinition, 'providerOptions' | 'thinking'>) => ({
+	providerOptions: model.providerOptions,
+	thinking: model.thinking ?? null,
+})
+
+export const getRoleAwareModelRuntimeOptions = (
+	model: Pick<ModelDefinition, 'providerOptions' | 'thinking' | 'candidateOverrides' | 'evaluatorOverrides'>
+) => ({
+	...getModelRuntimeOptions(model),
+	...(model.candidateOverrides !== undefined
+		? {
+				candidateOverrides: {
+					providerOptions: model.candidateOverrides.providerOptions ?? {},
+					thinking: model.candidateOverrides.thinking ?? null,
+				},
+			}
+		: {}),
+	...(model.evaluatorOverrides !== undefined
+		? {
+				evaluatorOverrides: {
+					providerOptions: model.evaluatorOverrides.providerOptions ?? {},
+					thinking: model.evaluatorOverrides.thinking ?? null,
+				},
+			}
+		: {}),
+})
+
+export const getEffectiveModelRuntimeOptions = (
+	model: Pick<ModelDefinition, 'providerOptions' | 'thinking' | 'candidateOverrides' | 'evaluatorOverrides'>,
+	type: 'candidate' | 'evaluator'
+) => {
+	const overrides = type === 'candidate' ? model.candidateOverrides : model.evaluatorOverrides
+	return {
+		providerOptions: {
+			...(model.providerOptions ?? {}),
+			...(overrides?.providerOptions ?? {}),
+		},
+		thinking:
+			model.thinking !== undefined || overrides?.thinking !== undefined
+				? {
+						...(model.thinking ?? {}),
+						...(overrides?.thinking ?? {}),
+					}
+				: undefined,
+	}
+}
+
+export const getModelRuntimeOptionsJson = (
+	model: Pick<ModelDefinition, 'providerOptions' | 'thinking' | 'candidateOverrides' | 'evaluatorOverrides'>
+) => stableJsonStringify(getRoleAwareModelRuntimeOptions(model))
+
+const getModelIdentityKey = (
+	model: Pick<
+		ModelDefinition,
+		| 'provider'
+		| 'providerModelCode'
+		| 'extraIdentifier'
+		| 'providerOptions'
+		| 'thinking'
+		| 'candidateOverrides'
+		| 'evaluatorOverrides'
+	>
+) => `${model.provider}:${model.providerModelCode}:${model.extraIdentifier ?? ''}:${getModelRuntimeOptionsJson(model)}`
 
 const getActiveModels = (models: ModelDefinition[]) => {
 	const groupedModels = new Map<string, ModelDefinition[]>()

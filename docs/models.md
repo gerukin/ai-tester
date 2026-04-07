@@ -45,17 +45,25 @@ Create one YAML file per runnable provider model under `AI_TESTER_MODELS_DIR`.
 Example:
 
 ```yaml
-code: gpt-4o-mini
-provider: openai
-providerModelCode: gpt-4o-mini-2024-07-18
+code: gemini-2.5-flash
+provider: vertex
+providerModelCode: gemini-2.5-flash
 active: true
+thinking:
+  includeThoughts: true
+candidateOverrides:
+  thinking:
+    budgetTokens: 5000
+evaluatorOverrides:
+  thinking:
+    budgetTokens: 2000
 costs:
   - costPerCall: 0
-    costPerPromptToken: 0.00000015
-    costPerCompletionToken: 0.0000006
+    costPerPromptToken: 0.0000003
+    costPerCompletionToken: 0.0000025
     costPerHour: 0
     currency: USD
-    validFrom: 2024-07-18
+    validFrom: 2025-06-29
 ```
 
 Fields:
@@ -65,7 +73,22 @@ Fields:
 - `providerModelCode`: The provider-facing runtime model identifier.
 - `extraIdentifier`: Optional provider-specific identifier.
 - `active`: Optional model-version switch. Defaults to `true`. Inactive model versions are excluded from runs and reports.
+- `providerOptions`: Optional provider-specific request fields to pass through for this model version.
+- `thinking`: Optional per-model thinking/reasoning settings. Use this for provider-agnostic options such as reasoning effort, thinking token budgets, or custom reasoning tag extraction when supported by the provider wrapper.
+- `candidateOverrides`: Optional candidate-only runtime overrides. These merge on top of the base `providerOptions` and `thinking`.
+- `evaluatorOverrides`: Optional evaluator-only runtime overrides. These merge on top of the base `providerOptions` and `thinking`.
 - `costs`: Full cost history for this model version. This array is the source of truth.
+
+`providerOptions` is the escape hatch for anything provider-specific that is not modeled directly by the app.
+
+`thinking` is the portable layer used by the app to map common reasoning options to each provider:
+
+- OpenAI and OpenAI-compatible providers: `effort`
+- Vertex Gemini: `budgetTokens`, `includeThoughts`
+- Anthropic-style providers: `enabled`, `budgetTokens`
+- Ollama: `extractionTagName` and `enabled` for reasoning extraction
+
+When the same model needs different runtime options as a candidate versus an evaluator, put the shared settings in `providerOptions` / `thinking` and only the differences in `candidateOverrides` / `evaluatorOverrides`.
 
 ## Activation rules
 
@@ -75,6 +98,7 @@ After syncing:
 - rows missing from YAML are marked inactive
 - historical sessions and evaluations remain in the database
 - if a YAML file is restored later, the matching row becomes active again
+- changing `providerOptions`, `thinking`, `candidateOverrides`, or `evaluatorOverrides` creates a new `model_versions` row in the database for that provider model identity
 - for multiple YAML entries sharing the same provider and `providerModelCode`, at most one may have `active: true`
 - if more than one active variant exists for the same provider/model code, startup fails and you must set `active: false` on the older variants
 - inactive providers, models, and model versions are excluded from new runs and reports
