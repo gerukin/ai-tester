@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-04-08
+
+> [!WARNING]
+> If you are upgrading from `v0.13.0`, read the migration guide first: [v0.13.0 to v0.14.0](/docs/migration-guides/0.13.0-0.14.0.md)
+
+### Added
+
+- Providers and models can now be defined from YAML files and synchronized into the database, instead of being maintained manually in SQL.
+- OpenAI-compatible providers can now be registered from provider YAML files, which allows services such as OpenRouter or other compatible endpoints to be configured directly.
+- Model YAML files can now define provider-specific runtime options and thinking settings on a per-model basis.
+
+### Changed
+
+- Model costs are now owned by the `costs` array in each model YAML file and synchronized as the source of truth.
+- Providers, models, and model versions missing from YAML are now marked inactive instead of remaining implicitly available for new runs.
+- Main config entries that reference unavailable provider/model pairs are now warned about and skipped instead of failing outright.
+- Runtime model behavior that was previously hardcoded for specific providers/models is now defined in model YAML.
+- Version-specific migration guides now live under `docs/migration-guides/`.
+
 ## [0.13.0] - 2025-07-27
 
 ### Added
@@ -118,7 +137,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - 🎉 Version `0.9.0` is out... with all the base features. It isn't quite yet stable or tested enough to be relied upon.
 
-[Unreleased]: https://github.com/gerukin/ai-tester/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/gerukin/ai-tester/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/gerukin/ai-tester/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/gerukin/ai-tester/compare/v0.12.1...v0.13.0
 [0.12.1]: https://github.com/gerukin/ai-tester/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/gerukin/ai-tester/compare/v0.11.0...v0.12.0
