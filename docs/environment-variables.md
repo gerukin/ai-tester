@@ -20,11 +20,15 @@ The following environment variables are used by the AI Tester...
 
 ## Optional variables
 
+- `AI_TESTER_CURRENCIES_DIR`: Path to the currency YAML directory. Example: `.local/data/currencies`.
 - `AI_TESTER_STRUCTURED_SCHEMAS_DIR`: Path to the structured schemas directory. Example: `.local/data/structured-schemas`.
 - `AI_TESTER_TOOL_DEFINITIONS_DIR`: Path to the tool definitions directory. Example: `.local/data/tool-definitions`.
 
 > [!IMPORTANT]
 > If you plan on using structured schemas or tool definitions, you must set the `AI_TESTER_STRUCTURED_SCHEMAS_DIR` and `AI_TESTER_TOOL_DEFINITIONS_DIR` variables respectively. If you do not plan on using them, you can omit these variables.
+
+> [!NOTE]
+> `AI_TESTER_CURRENCIES_DIR` is optional. When set, currency exchange rates are synchronized from YAML files and become the source of truth for app-owned exchange-rate data. When omitted, the app continues using whatever currency data already exists in the database.
 
 ## Optional variables (with defaults)
 

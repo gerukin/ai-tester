@@ -5,6 +5,7 @@ import { models, modelVersions } from '../database/schema/models.js';
 import { currencies, modelCosts } from '../database/schema/costs.js';
 import { sessionEvaluations, sessions } from '../database/schema/sessions.js';
 import { clearFileBackedModelRegistryCache, getModelRuntimeOptionsJson, loadFileBackedModelRegistry, } from '../config/model-registry.js';
+import { isCurrencyRegistryConfigured, validateCurrencyRegistryReferences } from '../config/currency-registry.js';
 const getModelIdentityKey = (model) => `${model.provider}:${model.providerModelCode}:${model.extraIdentifier ?? ''}:${getModelRuntimeOptionsJson(model)}`;
 const setActiveByIds = async (tx, table, ids) => {
     await tx.update(table).set({ active: false });
@@ -224,9 +225,16 @@ const syncRegistryToDb = async (registry) => {
 };
 export async function updateProvidersInDb() {
     console.log('Updating providers and models in the database...');
-    clearFileBackedModelRegistryCache();
-    const registry = loadFileBackedModelRegistry();
-    await syncRegistryToDb(registry);
-    clearFileBackedModelRegistryCache();
+    try {
+        clearFileBackedModelRegistryCache();
+        if (isCurrencyRegistryConfigured()) {
+            validateCurrencyRegistryReferences();
+        }
+        const registry = loadFileBackedModelRegistry();
+        await syncRegistryToDb(registry);
+    }
+    finally {
+        clearFileBackedModelRegistryCache();
+    }
     console.log('✅ Providers and models updated!');
 }

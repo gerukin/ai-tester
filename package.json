@@ -1,6 +1,6 @@
 {
 	"name": "ai-tester",
-	"version": "0.14.0",
+	"version": "0.15.0",
 	"type": "module",
 	"engines": {
 		"node": ">=23.6.0",
@@ -23,7 +23,8 @@
 		"migrations:gen:custom": "npm run --silent migrations:drizzle-kit generate --custom",
 		"migrations:gen:drop": "npm run --silent migrations:drizzle-kit drop",
 		"migrations:check": "npm run --silent migrations:drizzle-kit check",
-		"migrations:run": "npx ai-tester-migrate"
+		"migrations:run": "npx ai-tester-migrate",
+		"test:currencies": "npm run --silent compile && node ./dist/scripts/test-currencies.js"
 	},
 	"dependencies": {
 		"@ai-sdk/google-vertex": "^2.1.11",

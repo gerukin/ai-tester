@@ -137,4 +137,4 @@ Analysis queries are a way to pre-define queries to run on the database. These q
 > [!NOTE]
 > Only active tests with completed evaluations are shown in the analysis queries.
 >
-> Model costs come from model YAML files. Currency exchange rates are still maintained separately in the database.
+> Model costs come from model YAML files. Currency exchange rates come from currency YAML files when `AI_TESTER_CURRENCIES_DIR` is configured; otherwise they are read from the existing database rows. If you do not use currency YAML files, you are responsible for seeding the needed currency rows and exchange-rate history yourself; without those rows, cost conversion for that currency will not be available.

@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-04-08
+
+> [!WARNING]
+> If you are upgrading from `v0.14.0`, read the migration guide first: [v0.14.0 to v0.15.0](/docs/migration-guides/0.14.0-0.15.0.md)
+
+### Added
+
+- Currencies and exchange-rate histories can now be defined from YAML files and synchronized into the database.
+- New optional `AI_TESTER_CURRENCIES_DIR` environment variable for a file-backed currency registry.
+
+### Changed
+
+- The `Update the database from files` workflow now synchronizes file-backed currencies before the other registries.
+- Manual SQL is no longer the recommended path for app-owned exchange-rate data; it remains available for schema changes and custom/private SQL assets.
+
 ## [0.14.0] - 2026-04-08
 
 > [!WARNING]
@@ -137,7 +152,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - 🎉 Version `0.9.0` is out... with all the base features. It isn't quite yet stable or tested enough to be relied upon.
 
-[Unreleased]: https://github.com/gerukin/ai-tester/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/gerukin/ai-tester/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/gerukin/ai-tester/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/gerukin/ai-tester/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/gerukin/ai-tester/compare/v0.12.1...v0.13.0
 [0.12.1]: https://github.com/gerukin/ai-tester/compare/v0.12.0...v0.12.1

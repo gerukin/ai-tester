@@ -34,7 +34,8 @@ Basic steps:
 3. Create your [tests and evaluations](tests-and-evaluations.md).
 4. Create your [configuration file](config-file.md).
 5. Create your [provider and model YAML files](models.md).
-6. Add any remaining [manual SQL data](sql-data.md), such as currency exchange rates.
+6. Add currency YAML files if you want file-backed exchange rates.
+7. Add any remaining [manual SQL data](sql-data.md) for custom/private SQL assets.
 
 Only after that should you run [migrations](#database-migrations) or any other command.
 

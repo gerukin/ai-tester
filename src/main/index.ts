@@ -6,6 +6,7 @@ import { showStats } from './stats.js'
 import { updateStructuredObjectsInDb } from './structured-objects.js'
 import { updateToolsInDb } from './tools.js'
 import { updateProvidersInDb } from './providers.js'
+import { updateCurrenciesInDb } from './currencies.js'
 
 export {
 	updatePromptsInDb,
@@ -16,4 +17,5 @@ export {
 	updateStructuredObjectsInDb,
 	updateToolsInDb,
 	updateProvidersInDb,
+	updateCurrenciesInDb,
 }

@@ -6,4 +6,5 @@ import { showStats } from './stats.js';
 import { updateStructuredObjectsInDb } from './structured-objects.js';
 import { updateToolsInDb } from './tools.js';
 import { updateProvidersInDb } from './providers.js';
-export { updatePromptsInDb, updateTestsInDb, runAllTests, runAllEvaluations, showStats, updateStructuredObjectsInDb, updateToolsInDb, updateProvidersInDb, };
+import { updateCurrenciesInDb } from './currencies.js';
+export { updatePromptsInDb, updateTestsInDb, runAllTests, runAllEvaluations, showStats, updateStructuredObjectsInDb, updateToolsInDb, updateProvidersInDb, updateCurrenciesInDb, };

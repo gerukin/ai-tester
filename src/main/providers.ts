@@ -13,6 +13,7 @@ import {
 	type ModelDefinition,
 	type ProviderDefinition,
 } from '../config/model-registry.js'
+import { isCurrencyRegistryConfigured, validateCurrencyRegistryReferences } from '../config/currency-registry.js'
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0]
 
@@ -281,10 +282,16 @@ const syncRegistryToDb = async (registry: FileBackedModelRegistry) => {
 export async function updateProvidersInDb() {
 	console.log('Updating providers and models in the database...')
 
-	clearFileBackedModelRegistryCache()
-	const registry = loadFileBackedModelRegistry()
-	await syncRegistryToDb(registry)
-	clearFileBackedModelRegistryCache()
+	try {
+		clearFileBackedModelRegistryCache()
+		if (isCurrencyRegistryConfigured()) {
+			validateCurrencyRegistryReferences()
+		}
+		const registry = loadFileBackedModelRegistry()
+		await syncRegistryToDb(registry)
+	} finally {
+		clearFileBackedModelRegistryCache()
+	}
 
 	console.log('✅ Providers and models updated!')
 }

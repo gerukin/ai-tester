@@ -1,0 +1,4 @@
+code: USD
+rates:
+  - rateInUSD: 1
+    validFrom: 2025-01-19

@@ -1,6 +1,7 @@
 import { askYesNo } from '../utils/menus.js';
-import { updatePromptsInDb, updateTestsInDb, runAllTests, runAllEvaluations, updateStructuredObjectsInDb, updateToolsInDb, updateProvidersInDb, } from '../main/index.js';
+import { updatePromptsInDb, updateTestsInDb, runAllTests, runAllEvaluations, updateStructuredObjectsInDb, updateToolsInDb, updateProvidersInDb, updateCurrenciesInDb, } from '../main/index.js';
 const updateAll = async () => {
+    await updateCurrenciesInDb();
     await updateProvidersInDb();
     await updateStructuredObjectsInDb();
     await updateToolsInDb();
@@ -18,7 +19,7 @@ const runMissingStuff = async (fnc) => {
 export const testsAndEvalsMenus = [
     {
         name: 'Update the database from files',
-        description: 'Synchronize providers, models, prompts, tests, structured objects, and tools with the database.',
+        description: 'Synchronize currencies, providers, models, prompts, tests, structured objects, and tools with the database.',
         action: updateAll,
     },
     {
