@@ -12,16 +12,11 @@ import {
 } from 'ai'
 import type { z } from 'zod'
 
-import { envConfig, getFileBackedModelRegistry, resolveTestsConfig } from '../config/index.js'
-import { db } from '../database/db.js'
 import { schema } from '../database/schema.js'
-import { askYesNo } from '../utils/menus.js'
-import { getProvider, wrapModel } from '../llms/index.js'
 import { getSectionsFromMarkdownContent, sectionsToAiMessages, getReferencedFiles } from '../utils/markdown.js'
-import { ToolDefinition } from './tools.js'
-import { logModelError } from '../utils/errors.js'
-import { state } from '../utils/state.js'
+import { ToolDefinition } from './tool-definition.js'
 import { getRequiredLanguageModelTokenUsage } from '../utils/ai-sdk.js'
+import type { FileBackedModelRegistry } from '../config/model-registry.js'
 
 /**
  * Logs the number of skipped tests based on the current attempt and total attempts.
@@ -35,15 +30,34 @@ const logSkippedTests = (attempts: number, attempt: number) => {
 	return skippedAttempts
 }
 
-export const runAllTests = async () => {
-	const testsConfig = resolveTestsConfig()
-	const registry = getFileBackedModelRegistry()
-	state.startRun()
+type SessionRunnerDeps = {
+	db: {
+		select: typeof import('../database/db.js').db.select
+		insert: typeof import('../database/db.js').db.insert
+	}
+	testsConfig: ReturnType<typeof import('../config/config-file.js').resolveTestsConfig>
+	registry: FileBackedModelRegistry
+	confirmRun: (message: string) => Promise<boolean>
+	getProvider: (providerCode: string) => ReturnType<typeof import('../llms/index.js').getProvider>
+	wrapModel: typeof import('../llms/index.js').wrapModel
+	generateText: typeof generateText
+	logModelError: typeof import('../utils/errors.js').logModelError
+	envConfig: Pick<
+		typeof import('../config/environment.js').envConfig,
+		'AI_TESTER_TESTS_DIR' | 'MAX_WAIT_TIME' | 'MAX_TEST_OUTPUT_TOKENS'
+	>
+	state: Pick<typeof import('../utils/state.js').state, 'startRun' | 'endRun'>
+}
+
+const getMissingTests = async (
+	db: SessionRunnerDeps['db'],
+	testsConfig: SessionRunnerDeps['testsConfig']
+) => {
 	console.log('Checking for tests to run...')
 
 	if (testsConfig.candidates.length === 0) {
 		console.log('⚠️ No active candidate models are configured.')
-		return
+		return []
 	}
 
 	// we query the DB to get all missing tests not yet run
@@ -63,9 +77,6 @@ export const runAllTests = async () => {
 	} = schema
 
 	const modelConfigsWithTemperature = testsConfig.candidates.filter(candidate => candidate.temperature !== undefined)
-	const modelsWithTemperatures = new Map<string, number>(
-		modelConfigsWithTemperature.map(({ provider, model, temperature }) => [`${provider}:${model}`, temperature!])
-	)
 	const modelConfigsWithTags = testsConfig.candidates.filter(
 		candidate => candidate.requiredTags !== undefined && candidate.requiredTags.length > 0
 	)
@@ -73,7 +84,7 @@ export const runAllTests = async () => {
 		candidate => candidate.prohibitedTags !== undefined && candidate.prohibitedTags.length > 0
 	)
 
-	const missingTests = await db
+	return db
 		.select({
 			modelVersionId: modelVersions.id,
 			modelVersionCode: modelVersions.providerModelCode,
@@ -204,6 +215,28 @@ export const runAllTests = async () => {
 		// ordering by model id is important as Ollama and other local models have some initial load time to consider
 		// and switching models regularly can be slow
 		.orderBy(modelVersions.id, testVersions.id, promptVersions.id)
+}
+
+export const runAllTestsWithDeps = async ({
+	db,
+	testsConfig,
+	registry,
+	confirmRun,
+	getProvider,
+	wrapModel,
+	generateText: generateTextFn,
+	logModelError,
+	envConfig,
+	state,
+}: SessionRunnerDeps) => {
+	state.startRun()
+
+	const { sessions } = schema
+	const missingTests = await getMissingTests(db, testsConfig)
+	const modelConfigsWithTemperature = testsConfig.candidates.filter(candidate => candidate.temperature !== undefined)
+	const modelsWithTemperatures = new Map<string, number>(
+		modelConfigsWithTemperature.map(({ provider, model, temperature }) => [`${provider}:${model}`, temperature!])
+	)
 
 	// The total number of missing tests needs to account for the number of attempts
 	const totalMissingTests = missingTests.reduce((acc, test) => acc + (testsConfig.attempts - test.sessionsCount), 0)
@@ -214,17 +247,17 @@ export const runAllTests = async () => {
 	}
 
 	// ask for confirmation
-	if (!(await askYesNo(`Are you sure you want to run all ${totalMissingTests} missing tests?`))) process.exit(0)
+	if (!(await confirmRun(`Are you sure you want to run all ${totalMissingTests} missing tests?`))) return
 
 	console.log('Running all missing tests...')
 
 	// For each missing test, we will run the test
 	let i = 1
-		for (const test of missingTests) {
-			const provider = getProvider(test.providerCode)
-			if (!provider) throw new Error(`Provider ${test.providerCode} not found`)
-			const modelDefinition = registry.modelsByReference.get(`${test.providerCode}:${test.modelVersionCode}`)
-			const model = wrapModel(provider(test.modelVersionCode), 'candidate', modelDefinition)
+	for (const test of missingTests) {
+		const provider = getProvider(test.providerCode)
+		if (!provider) throw new Error(`Provider ${test.providerCode} not found`)
+		const modelDefinition = registry.modelsByReference.get(`${test.providerCode}:${test.modelVersionCode}`)
+		const model = wrapModel(provider(test.modelVersionCode), 'candidate', modelDefinition)
 
 		const temperature =
 			modelsWithTemperatures.get(`${test.providerCode}:${test.modelVersionCode}`) ?? testsConfig.candidatesTemperature
@@ -251,7 +284,7 @@ export const runAllTests = async () => {
 			if (test.structuredObjectSchema) {
 				// If a structured object schema is present, use structured output.
 				try {
-					const structuredResponse = await generateText({
+					const structuredResponse = await generateTextFn({
 						model,
 						system: test.sysPromptContent,
 						messages,
@@ -288,7 +321,7 @@ export const runAllTests = async () => {
 				}
 
 				try {
-					response = await generateText({
+					response = await generateTextFn({
 						model,
 						system: test.sysPromptContent,
 						messages,
@@ -358,3 +391,36 @@ export const runAllTests = async () => {
 
 	state.endRun()
 }
+
+const createDefaultSessionRunnerDeps = async (): Promise<SessionRunnerDeps> => {
+	const [
+		{ resolveTestsConfig, getFileBackedModelRegistry, envConfig },
+		{ db },
+		{ askYesNo },
+		{ getProvider, wrapModel },
+		{ logModelError },
+		{ state },
+	] = await Promise.all([
+		import('../config/index.js'),
+		import('../database/db.js'),
+		import('../utils/menus.js'),
+		import('../llms/index.js'),
+		import('../utils/errors.js'),
+		import('../utils/state.js'),
+	])
+
+	return {
+		db,
+		testsConfig: resolveTestsConfig(),
+		registry: getFileBackedModelRegistry(),
+		confirmRun: askYesNo,
+		getProvider,
+		wrapModel,
+		generateText,
+		logModelError,
+		envConfig,
+		state,
+	}
+}
+
+export const runAllTests = async () => runAllTestsWithDeps(await createDefaultSessionRunnerDeps())

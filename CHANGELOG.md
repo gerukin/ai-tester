@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- A repository-native offline automated test suite covering runtime flows, sync flows, markdown parsing, config validation, stats, OpenRouter helpers, and app bootstrap.
+
+### Changed
+
+- Frontmatter parsing now trims leading whitespace before the actual prompt or test body, matching the installed local corpus while avoiding off-by-one extraction behavior.
+- Test parsing now treats only the last standalone `---` line as the start of evaluation instructions; earlier `---` usages remain part of the test content.
+
 ## [0.15.0] - 2026-04-09
 
 > [!WARNING]

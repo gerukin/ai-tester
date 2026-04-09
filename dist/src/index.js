@@ -1,2 +1,2 @@
-import { mainMenu } from './menus/main.js';
-await mainMenu();
+import { runDefaultApp } from './bootstrap.js';
+await runDefaultApp();

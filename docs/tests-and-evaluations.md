@@ -203,7 +203,12 @@ Structured response schemas also keep their existing on-disk JSON Schema shape. 
 
 ## Evaluation instructions
 
-The evaluation instructions are found at the end of the test file, after the last `---` separator. They can include placeholders for replacements as well.
+The evaluation instructions are found at the end of the test file, after the last standalone line containing only `---`. They can include placeholders for replacements as well.
+
+Any `---` used earlier in the file, whether embedded in a line or on its own line, is treated as normal content unless it is the last standalone `---` line in the file.
+
+> [!IMPORTANT]
+> Evaluation instructions cannot contain `---` on its own line. If they do, the last such line will be treated as the start of the evaluation instructions instead.
 
 Evaluators will use these instructions to produce 2 things:
 

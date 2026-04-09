@@ -17,6 +17,13 @@ export const ReplacementsValidation = z.union([
     z.array(z.record(ReplacementValueValidation))
 ]);
 const USER_MESSAGE_MARKER = '# 👤', ASSISTANT_MESSAGE_MARKER = '# 🤖', EVALUATION_MARKER = '---';
+const getLastStandaloneEvaluationMarkerIndex = (content) => {
+    let lastIndex;
+    for (const match of content.matchAll(/^---$/gm)) {
+        lastIndex = match.index;
+    }
+    return lastIndex;
+};
 /**
  * Extract the front matter and template from a markdown file.
  *
@@ -25,7 +32,7 @@ const USER_MESSAGE_MARKER = '# 👤', ASSISTANT_MESSAGE_MARKER = '# 🤖', EVALU
  */
 export const extractFrontMatterAndTemplate = (content) => {
     const frontmatterArea = content.match(/^---\n([\s\S]*?)\n---\n/);
-    const template = frontmatterArea?.[0] ? content.slice(frontmatterArea[0].length + 1) : content;
+    const template = frontmatterArea?.[0] ? content.slice(frontmatterArea[0].length).trimStart() : content;
     const templateConfig = frontmatterArea?.[1] ? yaml.parse(frontmatterArea[1], { strict: false }) : {};
     return { template, templateConfig };
 };
@@ -102,12 +109,14 @@ export const getReferencedFiles = (content, basePath, getHashes = false, encodin
  * @throws If no sections are found in the markdown content
  */
 export const getSectionsFromMarkdownContent = (content) => {
-    // if the evaluation marker is present more than once in the content, it's an error
-    if ((content.match(new RegExp(EVALUATION_MARKER, 'g')) || []).length > 1)
-        throw new Error(`More than one evaluation marker (${EVALUATION_MARKER}) found in the markdown content`);
+    const lastEvaluationMarkerIndex = getLastStandaloneEvaluationMarkerIndex(content);
+    const preEvaluationContent = lastEvaluationMarkerIndex === undefined ? content : content.slice(0, lastEvaluationMarkerIndex);
+    const evaluationContent = lastEvaluationMarkerIndex === undefined
+        ? undefined
+        : content.slice(lastEvaluationMarkerIndex + EVALUATION_MARKER.length).trimStart();
     const sections = [];
     // Each section is either a user message, bot message, or evaluation
-    const matches = content.match(new RegExp(`((?:^|${USER_MESSAGE_MARKER}|${ASSISTANT_MESSAGE_MARKER}|${EVALUATION_MARKER})(?:.|\n)+?)(?=${USER_MESSAGE_MARKER}|${ASSISTANT_MESSAGE_MARKER}|${EVALUATION_MARKER}|$)`, 'g'));
+    const matches = preEvaluationContent.match(new RegExp(`((?:^|${USER_MESSAGE_MARKER}|${ASSISTANT_MESSAGE_MARKER})(?:.|\n)+?)(?=${USER_MESSAGE_MARKER}|${ASSISTANT_MESSAGE_MARKER}|$)`, 'g'));
     // We filter out empty sections which may have been matched (normally at the start of the content)
     const filteredMatches = matches?.filter(match => match.trim().length > 0);
     if (!filteredMatches)
@@ -117,16 +126,22 @@ export const getSectionsFromMarkdownContent = (content) => {
             ? 'user'
             : section.startsWith(ASSISTANT_MESSAGE_MARKER)
                 ? 'assistant'
-                : section.startsWith(EVALUATION_MARKER)
-                    ? 'evaluation'
-                    : 'system';
+                : 'system';
         return {
             type,
             content: section
-                .replace(new RegExp(`${USER_MESSAGE_MARKER}|${ASSISTANT_MESSAGE_MARKER}|${EVALUATION_MARKER}`), '')
+                .replace(new RegExp(`${USER_MESSAGE_MARKER}|${ASSISTANT_MESSAGE_MARKER}`), '')
                 .trim(),
         };
     }));
+    if (evaluationContent !== undefined) {
+        sections.push({
+            type: 'evaluation',
+            content: evaluationContent.trim(),
+        });
+    }
+    if (sections.length === 0)
+        throw new Error('No sections found in the markdown content');
     return sections;
 };
 /**

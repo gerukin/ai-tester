@@ -30,6 +30,16 @@ npm run start
 npm run start:dev
 ```
 
+## Automated tests
+
+```sh
+npm test
+```
+
+The automated suite runs offline and does not require live model credentials.
+
+Ollama coverage in this repository is exercised through deterministic stubbed tests rather than a live Ollama server.
+
 ## Migrations
 
 Generate a migration file from changes in the schema:

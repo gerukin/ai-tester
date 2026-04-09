@@ -4,14 +4,8 @@
 import { and, or, eq, ne, inArray, sql, lt, countDistinct, aliasedTable } from 'drizzle-orm';
 import { generateText, Output } from 'ai';
 import z from 'zod';
-import { resolveTestsConfig, envConfig, getFileBackedModelRegistry } from '../config/index.js';
-import { db } from '../database/db.js';
 import { schema } from '../database/schema.js';
-import { askYesNo } from '../utils/menus.js';
-import { getProvider, wrapModel } from '../llms/index.js';
 import { getSectionsFromMarkdownContent, sectionsToAiMessages } from '../utils/markdown.js';
-import { logModelError } from '../utils/errors.js';
-import { state } from '../utils/state.js';
 import { getRequiredLanguageModelTokenUsage } from '../utils/ai-sdk.js';
 const evalSchema = z.object({
     // Note: `.nullable()` is not supported by some providers (like Vertex AI) as it generates an unsupported `anyOf` schema
@@ -23,23 +17,19 @@ const evalSchema = z.object({
         .boolean()
         .describe("A boolean value indicating whether the AI candidate's response is as expected in the evaluation instructions."),
 });
-export const runAllEvaluations = async () => {
-    const testsConfig = resolveTestsConfig();
-    const registry = getFileBackedModelRegistry();
-    state.startRun();
+const getMissingEvaluations = async (db, testsConfig) => {
     console.log('Checking for evaluations to run...');
     if (testsConfig.candidates.length === 0) {
         console.log('⚠️ No active candidate models are configured.');
-        return;
+        return [];
     }
     if (testsConfig.evaluators.length === 0) {
         console.log('⚠️ No active evaluator models are configured.');
-        return;
+        return [];
     }
     // we query the DB to get all missing evaluations not yet run
     const { testVersions, prompts, testToTagRels, testEvaluationInstructionsVersions, testToEvaluationInstructionsRels, tags, sessions, modelVersions, providers, models, promptVersions, sessionEvaluations, } = schema;
     const modelConfigsWithTemperature = testsConfig.evaluators.filter(evaluator => evaluator.temperature !== undefined);
-    const modelsWithTemperatures = new Map(modelConfigsWithTemperature.map(({ provider, model, temperature }) => [`${provider}:${model}`, temperature]));
     const modelConfigsWithTags = testsConfig.evaluators.filter(candidate => candidate.requiredTags !== undefined && candidate.requiredTags.length > 0);
     const modelConfigsWithProhibitedTags = testsConfig.evaluators.filter(candidate => candidate.prohibitedTags !== undefined && candidate.prohibitedTags.length > 0);
     const candidateModelConfigsWithTemperature = testsConfig.candidates.filter(candidate => candidate.temperature !== undefined);
@@ -50,7 +40,7 @@ export const runAllEvaluations = async () => {
     const candidateModelAlias = aliasedTable(models, 'candidate_model_alias');
     const evaluatorModelAlias = aliasedTable(models, 'evaluator_model_alias');
     const testSysPromptAlias = aliasedTable(promptVersions, 'test_sys_prompt_alias');
-    const missingEvaluations = await db
+    return db
         .select({
         modelVersionId: modelVersions.id,
         modelVersionCode: modelVersions.providerModelCode,
@@ -138,6 +128,13 @@ export const runAllEvaluations = async () => {
         // ordering by model id is important as Ollama and other local models have some initial load time to consider
         // and switching models regularly can be slow
         .orderBy(modelVersions.id, sessions.id, promptVersions.id);
+};
+export const runAllEvaluationsWithDeps = async ({ db, testsConfig, registry, confirmRun, getProvider, wrapModel, generateText: generateTextFn, logModelError, envConfig, state, }) => {
+    state.startRun();
+    const { sessionEvaluations } = schema;
+    const missingEvaluations = await getMissingEvaluations(db, testsConfig);
+    const modelConfigsWithTemperature = testsConfig.evaluators.filter(evaluator => evaluator.temperature !== undefined);
+    const modelsWithTemperatures = new Map(modelConfigsWithTemperature.map(({ provider, model, temperature }) => [`${provider}:${model}`, temperature]));
     // The total number of missing evaluations needs to account for the number of judgments
     const totalMissingEvaluations = missingEvaluations.reduce((acc, evaluation) => acc + (testsConfig.evaluationsPerEvaluator - evaluation.evaluationsCount), 0);
     if (totalMissingEvaluations === 0) {
@@ -145,8 +142,8 @@ export const runAllEvaluations = async () => {
         return;
     }
     // ask for confirmation
-    if (!(await askYesNo(`Are you sure you want to run all ${totalMissingEvaluations} missing evaluations?`)))
-        process.exit(0);
+    if (!(await confirmRun(`Are you sure you want to run all ${totalMissingEvaluations} missing evaluations?`)))
+        return;
     console.log('Running all missing evaluations...');
     // For each missing test, we will run the test
     let i = 1;
@@ -182,7 +179,7 @@ export const runAllEvaluations = async () => {
             const startTime = Date.now();
             let response;
             try {
-                response = await generateText({
+                response = await generateTextFn({
                     model,
                     messages,
                     temperature,
@@ -214,6 +211,7 @@ export const runAllEvaluations = async () => {
                 break;
             }
             // add the response to the DB as a session
+            const trimmedFeedback = response.output.feedback?.trim();
             await db.insert(sessionEvaluations).values({
                 sessionId: evaluation.sessionId,
                 evaluationPromptVersionId: evaluation.evalPromptVersionId,
@@ -221,7 +219,7 @@ export const runAllEvaluations = async () => {
                 modelVersionId: evaluation.modelVersionId,
                 temperature,
                 pass: response.output.pass ? 1 : 0,
-                feedback: response.output.feedback ? response.output.feedback.trim() : null, // null if empty
+                feedback: trimmedFeedback ? trimmedFeedback : null,
                 completionTokens,
                 promptTokens,
                 timeTaken: endTime - startTime,
@@ -234,3 +232,26 @@ export const runAllEvaluations = async () => {
     }
     state.endRun();
 };
+const createDefaultEvaluationRunnerDeps = async () => {
+    const [{ resolveTestsConfig, envConfig, getFileBackedModelRegistry }, { db }, { askYesNo }, { getProvider, wrapModel }, { logModelError }, { state },] = await Promise.all([
+        import('../config/index.js'),
+        import('../database/db.js'),
+        import('../utils/menus.js'),
+        import('../llms/index.js'),
+        import('../utils/errors.js'),
+        import('../utils/state.js'),
+    ]);
+    return {
+        db,
+        testsConfig: resolveTestsConfig(),
+        registry: getFileBackedModelRegistry(),
+        confirmRun: askYesNo,
+        getProvider,
+        wrapModel,
+        generateText,
+        logModelError,
+        envConfig,
+        state,
+    };
+};
+export const runAllEvaluations = async () => runAllEvaluationsWithDeps(await createDefaultEvaluationRunnerDeps());

@@ -16,6 +16,7 @@
 		"publish:patch": "npm run compile && npm version patch",
 		"publish:minor": "npm run compile && npm version minor",
 		"publish:major": "npm run compile && npm version major",
+		"test": "node --import tsx --test tests/**/*.test.ts",
 		"start": "node --no-warnings ./dist/src/index.js",
 		"start:dev": "npm run --silent compile && npm run --silent start",
 		"migrations:drizzle-kit": "npm run compile && node ./dist/scripts/migrations-all.js",
@@ -41,6 +42,8 @@
 		"zod": "^3.25.76"
 	},
 	"devDependencies": {
+		"@types/node": "^24.6.0",
+		"tsx": "^4.20.6",
 		"typescript": "^5.7.3"
 	}
 }

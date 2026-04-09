@@ -13,13 +13,7 @@ import { listAllYamlFiles } from '../utils/files.js'
 import { generateHash } from '../utils/crypto.js'
 import { db } from '../database/db.js'
 import { schema } from '../database/schema.js'
-
-export const ToolDefinition = z.object({
-	name: z.string(),
-	description: z.string(),
-	parameters: z.any(),
-	// allow any additional fields
-})
+import { ToolDefinition } from './tool-definition.js'
 
 /**
  * Fetches a tool definition from a YAML file.
