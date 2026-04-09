@@ -176,6 +176,8 @@ availableTools:
 
 When you specify tools in the test frontmatter, the LLM will be able to call these tools during the test. The tool definitions (parameters, description, etc.) are loaded from the tool definitions directory and versioned. If you change a tool definition, a new tool version will be created and linked to new test versions as appropriate.
 
+Tool definition files continue to use the `parameters` field on disk for backward compatibility. Internally, the runtime maps that field to the AI SDK 6 `inputSchema` shape before calling the model, so existing tool YAML files do not need to be renamed.
+
 The LLM will be given a choice to call any or several of the tools listed in the `availableTools` field, or even directly reply to the user. The tool choice is `automatic` and decided purely by the LLM. The calls themselves (or the response) are then returned as part of the response to evaluate for the test.
 
 > [!IMPORTANT]
@@ -196,6 +198,8 @@ If you want to test tool use, make sure to include the tool in `availableTools` 
 
 > [!NOTE]
 > The `availableTools` field is not compatible with all LLMs (the LLM must officially support tool calling), and cannot be used at the same time as the `structuredResponseSchema` field.
+
+Structured response schemas also keep their existing on-disk JSON Schema shape. The runtime now routes them through AI SDK 6 structured output support internally, without changing the file format.
 
 ## Evaluation instructions
 

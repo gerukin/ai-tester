@@ -3,7 +3,7 @@
  */
 
 import { and, or, eq, ne, inArray, sql, lt, countDistinct, aliasedTable } from 'drizzle-orm'
-import { generateObject, type GenerateObjectResult } from 'ai'
+import { generateText, Output } from 'ai'
 import z from 'zod'
 
 import { resolveTestsConfig, envConfig, getFileBackedModelRegistry } from '../config/index.js'
@@ -14,6 +14,7 @@ import { getProvider, wrapModel } from '../llms/index.js'
 import { getSectionsFromMarkdownContent, sectionsToAiMessages } from '../utils/markdown.js'
 import { logModelError } from '../utils/errors.js'
 import { state } from '../utils/state.js'
+import { getRequiredLanguageModelTokenUsage } from '../utils/ai-sdk.js'
 
 const evalSchema = z.object({
 	// Note: `.nullable()` is not supported by some providers (like Vertex AI) as it generates an unsupported `anyOf` schema
@@ -30,7 +31,6 @@ const evalSchema = z.object({
 			"A boolean value indicating whether the AI candidate's response is as expected in the evaluation instructions."
 		),
 })
-type EvalSchema = z.infer<typeof evalSchema>
 
 export const runAllEvaluations = async () => {
 	const testsConfig = resolveTestsConfig()
@@ -341,14 +341,14 @@ export const runAllEvaluations = async () => {
 		for (let judgment = evaluation.evaluationsCount; judgment < testsConfig.evaluationsPerEvaluator; judgment++) {
 			// run the test
 			const startTime = Date.now()
-			let response: GenerateObjectResult<EvalSchema>
+			let response: Awaited<ReturnType<typeof generateText>>
 			try {
-				response = await generateObject({
+				response = await generateText({
 					model,
-					schema: evalSchema,
 					messages,
 					temperature,
-					maxTokens: envConfig.MAX_EVALUATION_OUTPUT_TOKENS,
+					output: Output.object({ schema: evalSchema }),
+					maxOutputTokens: envConfig.MAX_EVALUATION_OUTPUT_TOKENS,
 					abortSignal: AbortSignal.timeout(envConfig.MAX_WAIT_TIME),
 				})
 			} catch (err) {
@@ -359,6 +359,16 @@ export const runAllEvaluations = async () => {
 				break
 			}
 			const endTime = Date.now()
+			let completionTokens: number, promptTokens: number
+			try {
+				;({ completionTokens, promptTokens } = getRequiredLanguageModelTokenUsage(response.usage))
+			} catch (err) {
+				logModelError(err, 'eval', i, totalMissingEvaluations, evaluation.modelVersionCode)
+				const skippedJudgments = testsConfig.evaluationsPerEvaluator - judgment - 1
+				i += testsConfig.evaluationsPerEvaluator - judgment
+				if (skippedJudgments > 0) console.log(`⏭️ Skipping ${skippedJudgments} similar judgment(s)...`)
+				break
+			}
 
 			// add the response to the DB as a session
 			await db.insert(sessionEvaluations).values({
@@ -367,10 +377,10 @@ export const runAllEvaluations = async () => {
 				testEvaluationInstructionsVersionId: evaluation.evalInstructionsId,
 				modelVersionId: evaluation.modelVersionId,
 				temperature,
-				pass: response.object.pass ? 1 : 0,
-				feedback: response.object.feedback ? response.object.feedback.trim() : null, // null if empty
-				completionTokens: response.usage.completionTokens,
-				promptTokens: response.usage.promptTokens,
+				pass: response.output.pass ? 1 : 0,
+				feedback: response.output.feedback ? response.output.feedback.trim() : null, // null if empty
+				completionTokens,
+				promptTokens,
 				timeTaken: endTime - startTime,
 			})
 

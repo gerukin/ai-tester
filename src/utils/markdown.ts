@@ -1,6 +1,6 @@
 import yaml from 'yaml'
 import z from 'zod'
-import { type CoreMessage, type ImagePart, type FilePart } from 'ai'
+import type { ModelMessage } from 'ai'
 
 import { getFileInfo, type FileType } from './files.js'
 import { generateHash } from './crypto.js'
@@ -234,15 +234,18 @@ export const sectionsToAiMessages = (
 	sections: TemplateSections,
 	includeSystem: boolean = false,
 	files?: ReferencedFiles
-): CoreMessage[] => {
-	const messages: CoreMessage[] = []
+): ModelMessage[] => {
+	const messages: ModelMessage[] = []
 
 	for (const { content, type } of sections) {
 		if (type === 'user' || type === 'assistant' || (includeSystem && type === 'system')) {
 			// for each message which references a file, we add a file reference
 			const fileReferences = files?.filter(file => content.includes(file.fileName))
 			if (fileReferences && fileReferences.length > 0 && type === 'user') {
-				const fileParts: (ImagePart | FilePart)[] = []
+				const fileParts: Array<
+					| { type: 'image'; image: string }
+					| { type: 'file'; data: string; mediaType: string }
+				> = []
 				for (const file of fileReferences) {
 					if (file.type.category === 'image') {
 						fileParts.push({
@@ -253,7 +256,7 @@ export const sectionsToAiMessages = (
 						fileParts.push({
 							type: 'file',
 							data: file.content,
-							mimeType: file.type.mime,
+							mediaType: file.type.mime,
 						})
 					}
 				}

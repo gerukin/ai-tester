@@ -1,12 +1,17 @@
-import {} from 'ai';
 import { wrapLanguageModel, extractReasoningMiddleware } from 'ai';
 import { addProviderSpecificProps } from './middlewares/add-provider-specific-props.js';
 import { getEffectiveModelRuntimeOptions } from '../../config/model-registry.js';
-const buildPerModelMiddlewares = (model, modelConfig, type) => {
+const getProviderOptionsNamespace = (providerId) => {
+    if (providerId.startsWith('google.vertex.'))
+        return 'vertex';
+    if (providerId.includes('.anthropic.'))
+        return 'anthropic';
+    return providerId.split('.')[0]?.trim();
+};
+const buildPerModelMiddlewares = (modelConfig, providerMetadataKey, supportsReasoningExtraction, type) => {
     const middlewares = [];
-    const providerMetadataKey = model.provider.split('.')[0]?.trim();
     const { providerOptions, thinking } = getEffectiveModelRuntimeOptions(modelConfig, type);
-    if (model.provider === 'ollama.chat') {
+    if (supportsReasoningExtraction) {
         if (thinking !== undefined && thinking.enabled !== false) {
             middlewares.push(extractReasoningMiddleware({ tagName: thinking?.extractionTagName ?? 'think' }));
         }
@@ -56,7 +61,12 @@ const buildPerModelMiddlewares = (model, modelConfig, type) => {
 export const wrapModel = (model, type, modelConfig) => {
     if (modelConfig === undefined)
         return model;
-    const middlewares = buildPerModelMiddlewares(model, modelConfig, type);
+    if (typeof model === 'string' || model.specificationVersion !== 'v3') {
+        return model;
+    }
+    const providerMetadataKey = getProviderOptionsNamespace(model.provider);
+    const supportsReasoningExtraction = model.provider.startsWith('ollama.');
+    const middlewares = buildPerModelMiddlewares(modelConfig, providerMetadataKey, supportsReasoningExtraction, type);
     if (middlewares.length > 0) {
         return wrapLanguageModel({ model, middleware: middlewares });
     }

@@ -1,6 +1,6 @@
 import { createOpenAI } from '@ai-sdk/openai';
 import { envConfig } from '../../config/index.js';
-export default createOpenAI({
+const openai = createOpenAI({
     apiKey: envConfig.OPENAI_API_KEY,
-    compatibility: 'strict', // strict mode, enable when using the OpenAI API
 });
+export default ((modelId) => openai.chat(modelId));

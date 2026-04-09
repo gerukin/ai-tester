@@ -2,7 +2,7 @@
  * This module is responsible for running all session evaluations that have not been run yet.
  */
 import { and, or, eq, ne, inArray, sql, lt, countDistinct, aliasedTable } from 'drizzle-orm';
-import { generateObject } from 'ai';
+import { generateText, Output } from 'ai';
 import z from 'zod';
 import { resolveTestsConfig, envConfig, getFileBackedModelRegistry } from '../config/index.js';
 import { db } from '../database/db.js';
@@ -12,6 +12,7 @@ import { getProvider, wrapModel } from '../llms/index.js';
 import { getSectionsFromMarkdownContent, sectionsToAiMessages } from '../utils/markdown.js';
 import { logModelError } from '../utils/errors.js';
 import { state } from '../utils/state.js';
+import { getRequiredLanguageModelTokenUsage } from '../utils/ai-sdk.js';
 const evalSchema = z.object({
     // Note: `.nullable()` is not supported by some providers (like Vertex AI) as it generates an unsupported `anyOf` schema
     feedback: z
@@ -181,12 +182,12 @@ export const runAllEvaluations = async () => {
             const startTime = Date.now();
             let response;
             try {
-                response = await generateObject({
+                response = await generateText({
                     model,
-                    schema: evalSchema,
                     messages,
                     temperature,
-                    maxTokens: envConfig.MAX_EVALUATION_OUTPUT_TOKENS,
+                    output: Output.object({ schema: evalSchema }),
+                    maxOutputTokens: envConfig.MAX_EVALUATION_OUTPUT_TOKENS,
                     abortSignal: AbortSignal.timeout(envConfig.MAX_WAIT_TIME),
                 });
             }
@@ -199,6 +200,19 @@ export const runAllEvaluations = async () => {
                 break;
             }
             const endTime = Date.now();
+            let completionTokens, promptTokens;
+            try {
+                ;
+                ({ completionTokens, promptTokens } = getRequiredLanguageModelTokenUsage(response.usage));
+            }
+            catch (err) {
+                logModelError(err, 'eval', i, totalMissingEvaluations, evaluation.modelVersionCode);
+                const skippedJudgments = testsConfig.evaluationsPerEvaluator - judgment - 1;
+                i += testsConfig.evaluationsPerEvaluator - judgment;
+                if (skippedJudgments > 0)
+                    console.log(`⏭️ Skipping ${skippedJudgments} similar judgment(s)...`);
+                break;
+            }
             // add the response to the DB as a session
             await db.insert(sessionEvaluations).values({
                 sessionId: evaluation.sessionId,
@@ -206,10 +220,10 @@ export const runAllEvaluations = async () => {
                 testEvaluationInstructionsVersionId: evaluation.evalInstructionsId,
                 modelVersionId: evaluation.modelVersionId,
                 temperature,
-                pass: response.object.pass ? 1 : 0,
-                feedback: response.object.feedback ? response.object.feedback.trim() : null, // null if empty
-                completionTokens: response.usage.completionTokens,
-                promptTokens: response.usage.promptTokens,
+                pass: response.output.pass ? 1 : 0,
+                feedback: response.output.feedback ? response.output.feedback.trim() : null, // null if empty
+                completionTokens,
+                promptTokens,
                 timeTaken: endTime - startTime,
             });
             console.log(`✅ Completed eval [${i} of ${totalMissingEvaluations}] with model ${evaluation.modelVersionCode} in ${

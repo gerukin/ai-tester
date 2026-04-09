@@ -2,7 +2,7 @@
  * This module is responsible for running all test sessions that have not been run yet.
  */
 import { and, or, eq, ne, inArray, sql, lt, countDistinct } from 'drizzle-orm';
-import { generateText, generateObject, jsonSchema, } from 'ai';
+import { generateText, jsonSchema, Output, } from 'ai';
 import { envConfig, getFileBackedModelRegistry, resolveTestsConfig } from '../config/index.js';
 import { db } from '../database/db.js';
 import { schema } from '../database/schema.js';
@@ -12,6 +12,7 @@ import { getSectionsFromMarkdownContent, sectionsToAiMessages, getReferencedFile
 import { ToolDefinition } from './tools.js';
 import { logModelError } from '../utils/errors.js';
 import { state } from '../utils/state.js';
+import { getRequiredLanguageModelTokenUsage } from '../utils/ai-sdk.js';
 /**
  * Logs the number of skipped tests based on the current attempt and total attempts.
  * @param attempts The total number of attempts for the test.
@@ -147,25 +148,26 @@ export const runAllTests = async () => {
             const startTime = Date.now();
             let response, answer, reasoning;
             if (test.structuredObjectSchema) {
-                // If a structured object schema is present, use generateObject
+                // If a structured object schema is present, use structured output.
                 try {
-                    response = await generateObject({
+                    const structuredResponse = await generateText({
                         model,
                         system: test.sysPromptContent,
                         messages,
                         temperature,
-                        maxTokens: envConfig.MAX_TEST_OUTPUT_TOKENS,
+                        output: Output.object({ schema: jsonSchema(test.structuredObjectSchema) }),
+                        maxOutputTokens: envConfig.MAX_TEST_OUTPUT_TOKENS,
                         abortSignal: AbortSignal.timeout(envConfig.MAX_WAIT_TIME),
-                        schema: jsonSchema(test.structuredObjectSchema),
                     });
+                    response = structuredResponse;
                 }
                 catch (err) {
                     logModelError(err, 'test', i, totalMissingTests, test.modelVersionCode);
                     i += logSkippedTests(testsConfig.attempts, attempt);
                     break;
                 }
-                answer = JSON.stringify(response.object);
-                reasoning = undefined; // reasoning is not available for structured objects
+                answer = JSON.stringify(response.output);
+                reasoning = undefined;
             }
             else {
                 // Otherwise, use generateText
@@ -179,7 +181,7 @@ export const runAllTests = async () => {
                         const toolVersion = JSON.parse(toolVersionSchema);
                         // Add subsequent tool version schemas to the existing toolSet
                         toolSet[toolVersion.name] = {
-                            parameters: jsonSchema(toolVersion.parameters),
+                            inputSchema: jsonSchema(toolVersion.parameters),
                             description: toolVersion.description,
                         };
                     }
@@ -191,7 +193,7 @@ export const runAllTests = async () => {
                         messages,
                         temperature,
                         tools: toolSet,
-                        maxTokens: envConfig.MAX_TEST_OUTPUT_TOKENS,
+                        maxOutputTokens: envConfig.MAX_TEST_OUTPUT_TOKENS,
                         abortSignal: AbortSignal.timeout(envConfig.MAX_WAIT_TIME),
                     });
                 }
@@ -202,14 +204,29 @@ export const runAllTests = async () => {
                 }
                 // if we called a tool, we need to extract the call(s) as the answer
                 if (response.toolCalls?.length > 0) {
-                    answer = JSON.stringify(response.toolCalls.map(call => ({ name: call.toolName, arguments: call.args })));
+                    answer = JSON.stringify(response.toolCalls.map(call => ({ name: call.toolName, arguments: call.input })));
                 }
                 else {
                     answer = response.text.trim();
                 }
-                reasoning = response.reasoning?.trim();
+                reasoning = response.reasoningText?.trim();
             }
             const endTime = Date.now();
+            let cachedPromptTokensRead, cachedPromptTokensWritten, completionTokens, promptTokens;
+            try {
+                ;
+                ({
+                    cachedPromptTokensRead,
+                    cachedPromptTokensWritten,
+                    completionTokens,
+                    promptTokens,
+                } = getRequiredLanguageModelTokenUsage(response.usage));
+            }
+            catch (err) {
+                logModelError(err, 'test', i, totalMissingTests, test.modelVersionCode);
+                i += logSkippedTests(testsConfig.attempts, attempt);
+                break;
+            }
             // add the response to the DB as a session
             await db.insert(sessions).values({
                 testVersionId: test.testVersionId,
@@ -218,12 +235,10 @@ export const runAllTests = async () => {
                 temperature,
                 reasoning,
                 answer,
-                completionTokens: response.usage.completionTokens,
-                cachedPromptTokensWritten: response.experimental_providerMetadata?.['anthropic']?.['cacheCreationInputTokens'] ?? undefined,
-                cachedPromptTokensRead: response.experimental_providerMetadata?.['anthropic']?.['cacheReadInputTokens'] ??
-                    response.experimental_providerMetadata?.['openai']?.['cachedPromptTokens'] ??
-                    undefined,
-                promptTokens: response.usage.promptTokens,
+                completionTokens,
+                cachedPromptTokensWritten,
+                cachedPromptTokensRead,
+                promptTokens,
                 timeTaken: endTime - startTime,
             });
             console.log(`✅ Completed test [${i} of ${totalMissingTests}] with model ${test.modelVersionCode} in ${

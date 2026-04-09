@@ -51,7 +51,9 @@ If not using a specific model provider, you can ignore the corresponding environ
 
 ### Ollama
 
-- `AI_TESTER_OLLAMA_BASE_URL`: The base URL of the OLLAMA server (including the port but without the OLLAMA specific path). Example: `http://localhost:11434/api`.
+- `AI_TESTER_OLLAMA_BASE_URL`: The base URL of the Ollama server, without an API suffix. Example: `http://localhost:11434`.
+
+The runtime normalizes this to Ollama's OpenAI-compatible `/v1` endpoint internally, so older values ending in `/api` or `/v1` are also accepted.
 
 ### OpenAI
 

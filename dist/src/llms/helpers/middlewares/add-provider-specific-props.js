@@ -1,10 +1,11 @@
 /** Middleware to inject provider specific properties. */
 export const addProviderSpecificProps = (provider, props) => ({
+    specificationVersion: 'v3',
     transformParams: async ({ params }) => {
         return {
             ...params,
-            providerMetadata: {
-                ...params.providerMetadata,
+            providerOptions: {
+                ...params.providerOptions,
                 [provider]: props,
             },
         };

@@ -27,19 +27,18 @@
 		"test:currencies": "npm run --silent compile && node ./dist/scripts/test-currencies.js"
 	},
 	"dependencies": {
-		"@ai-sdk/google-vertex": "^2.1.11",
-		"@ai-sdk/openai": "^1.1.9",
-		"@ai-sdk/openai-compatible": "^0.1.8",
-		"@ai-sdk/perplexity": "^0.0.7",
+		"@ai-sdk/google-vertex": "^4.0.105",
+		"@ai-sdk/openai": "^3.0.52",
+		"@ai-sdk/openai-compatible": "^2.0.41",
+		"@ai-sdk/perplexity": "^3.0.29",
 		"@inquirer/prompts": "^7.3.1",
 		"@libsql/client": "^0.14.0",
-		"ai": "^4.1.26",
+		"ai": "^6.0.153",
 		"dotenv": "^16.4.7",
 		"drizzle-kit": "^0.30.4",
 		"drizzle-orm": "^0.39.2",
-		"ollama-ai-provider": "^1.2.0",
 		"yaml": "^2.7.0",
-		"zod": "^3.24.1"
+		"zod": "^3.25.76"
 	},
 	"devDependencies": {
 		"typescript": "^5.7.3"

@@ -3,6 +3,8 @@ id: city-weather
 name: cityWeather
 description: Fetch the weather for a specific city.
 
+# Keep `parameters` in YAML for backward compatibility.
+# The runtime maps it to AI SDK 6 `inputSchema` internally.
 parameters:
   type: object
   properties:

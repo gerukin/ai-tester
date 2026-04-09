@@ -5,9 +5,8 @@
 import { and, or, eq, ne, inArray, sql, lt, countDistinct } from 'drizzle-orm'
 import {
 	generateText,
-	generateObject,
 	jsonSchema,
-	type GenerateObjectResult,
+	Output,
 	type GenerateTextResult,
 	type ToolSet,
 } from 'ai'
@@ -22,6 +21,7 @@ import { getSectionsFromMarkdownContent, sectionsToAiMessages, getReferencedFile
 import { ToolDefinition } from './tools.js'
 import { logModelError } from '../utils/errors.js'
 import { state } from '../utils/state.js'
+import { getRequiredLanguageModelTokenUsage } from '../utils/ai-sdk.js'
 
 /**
  * Logs the number of skipped tests based on the current attempt and total attempts.
@@ -244,29 +244,30 @@ export const runAllTests = async () => {
 			// run the test
 			const startTime = Date.now()
 
-			let response: GenerateObjectResult<unknown> | GenerateTextResult<ToolSet, never>,
+			let response: GenerateTextResult<ToolSet, never>,
 				answer: string | undefined,
 				reasoning: string | undefined
 
 			if (test.structuredObjectSchema) {
-				// If a structured object schema is present, use generateObject
+				// If a structured object schema is present, use structured output.
 				try {
-					response = await generateObject({
+					const structuredResponse = await generateText({
 						model,
 						system: test.sysPromptContent,
 						messages,
 						temperature,
-						maxTokens: envConfig.MAX_TEST_OUTPUT_TOKENS,
+						output: Output.object({ schema: jsonSchema(test.structuredObjectSchema) }),
+						maxOutputTokens: envConfig.MAX_TEST_OUTPUT_TOKENS,
 						abortSignal: AbortSignal.timeout(envConfig.MAX_WAIT_TIME),
-						schema: jsonSchema(test.structuredObjectSchema),
 					})
+					response = structuredResponse as GenerateTextResult<ToolSet, never>
 				} catch (err) {
 					logModelError(err, 'test', i, totalMissingTests, test.modelVersionCode)
 					i += logSkippedTests(testsConfig.attempts, attempt)
 					break
 				}
-				answer = JSON.stringify(response.object)
-				reasoning = undefined // reasoning is not available for structured objects
+				answer = JSON.stringify(response.output)
+				reasoning = undefined
 			} else {
 				// Otherwise, use generateText
 
@@ -280,7 +281,7 @@ export const runAllTests = async () => {
 
 						// Add subsequent tool version schemas to the existing toolSet
 						toolSet[toolVersion.name] = {
-							parameters: jsonSchema(toolVersion.parameters),
+							inputSchema: jsonSchema(toolVersion.parameters),
 							description: toolVersion.description,
 						}
 					}
@@ -293,7 +294,7 @@ export const runAllTests = async () => {
 						messages,
 						temperature,
 						tools: toolSet,
-						maxTokens: envConfig.MAX_TEST_OUTPUT_TOKENS,
+						maxOutputTokens: envConfig.MAX_TEST_OUTPUT_TOKENS,
 						abortSignal: AbortSignal.timeout(envConfig.MAX_WAIT_TIME),
 					})
 				} catch (err) {
@@ -304,15 +305,31 @@ export const runAllTests = async () => {
 
 				// if we called a tool, we need to extract the call(s) as the answer
 				if (response.toolCalls?.length > 0) {
-					answer = JSON.stringify(response.toolCalls.map(call => ({ name: call.toolName, arguments: call.args })))
+					answer = JSON.stringify(response.toolCalls.map(call => ({ name: call.toolName, arguments: call.input })))
 				} else {
 					answer = response.text.trim()
 				}
 
-				reasoning = response.reasoning?.trim()
+				reasoning = response.reasoningText?.trim()
 			}
 
 			const endTime = Date.now()
+			let cachedPromptTokensRead: number | undefined,
+				cachedPromptTokensWritten: number | undefined,
+				completionTokens: number,
+				promptTokens: number
+			try {
+				;({
+					cachedPromptTokensRead,
+					cachedPromptTokensWritten,
+					completionTokens,
+					promptTokens,
+				} = getRequiredLanguageModelTokenUsage(response.usage))
+			} catch (err) {
+				logModelError(err, 'test', i, totalMissingTests, test.modelVersionCode)
+				i += logSkippedTests(testsConfig.attempts, attempt)
+				break
+			}
 
 			// add the response to the DB as a session
 			await db.insert(sessions).values({
@@ -322,14 +339,10 @@ export const runAllTests = async () => {
 				temperature,
 				reasoning,
 				answer,
-				completionTokens: response.usage.completionTokens,
-				cachedPromptTokensWritten:
-					(response.experimental_providerMetadata?.['anthropic']?.['cacheCreationInputTokens'] as number) ?? undefined,
-				cachedPromptTokensRead:
-					(response.experimental_providerMetadata?.['anthropic']?.['cacheReadInputTokens'] as number) ??
-					(response.experimental_providerMetadata?.['openai']?.['cachedPromptTokens'] as number) ??
-					undefined,
-				promptTokens: response.usage.promptTokens,
+				completionTokens,
+				cachedPromptTokensWritten,
+				cachedPromptTokensRead,
+				promptTokens,
 				timeTaken: endTime - startTime,
 			})
 

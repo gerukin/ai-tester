@@ -1,6 +1,5 @@
 import yaml from 'yaml';
 import z from 'zod';
-import {} from 'ai';
 import { getFileInfo } from './files.js';
 import { generateHash } from './crypto.js';
 export const TagsValidation = z.array(z.string());
@@ -181,7 +180,7 @@ export const sectionsToAiMessages = (sections, includeSystem = false, files) => 
                         fileParts.push({
                             type: 'file',
                             data: file.content,
-                            mimeType: file.type.mime,
+                            mediaType: file.type.mime,
                         });
                     }
                 }

@@ -1,4 +1,4 @@
-import { type LanguageModel, type LanguageModelV1Middleware } from 'ai'
+import type { JSONValue, LanguageModel, LanguageModelMiddleware } from 'ai'
 import { wrapLanguageModel, extractReasoningMiddleware } from 'ai'
 
 import { addProviderSpecificProps } from './middlewares/add-provider-specific-props.js'
@@ -6,16 +6,22 @@ import { getEffectiveModelRuntimeOptions, type ModelDefinition } from '../../con
 
 type ModelType = 'candidate' | 'evaluator'
 
+const getProviderOptionsNamespace = (providerId: string) => {
+	if (providerId.startsWith('google.vertex.')) return 'vertex'
+	if (providerId.includes('.anthropic.')) return 'anthropic'
+	return providerId.split('.')[0]?.trim()
+}
+
 const buildPerModelMiddlewares = (
-	model: LanguageModel,
 	modelConfig: Pick<ModelDefinition, 'providerOptions' | 'thinking' | 'candidateOverrides' | 'evaluatorOverrides'>,
+	providerMetadataKey: string | undefined,
+	supportsReasoningExtraction: boolean,
 	type: ModelType
-): LanguageModelV1Middleware[] => {
-	const middlewares: LanguageModelV1Middleware[] = []
-	const providerMetadataKey = model.provider.split('.')[0]?.trim()
+): LanguageModelMiddleware[] => {
+	const middlewares: LanguageModelMiddleware[] = []
 	const { providerOptions, thinking } = getEffectiveModelRuntimeOptions(modelConfig, type)
 
-	if (model.provider === 'ollama.chat') {
+	if (supportsReasoningExtraction) {
 		if (thinking !== undefined && thinking.enabled !== false) {
 			middlewares.push(extractReasoningMiddleware({ tagName: thinking?.extractionTagName ?? 'think' }))
 		}
@@ -23,7 +29,7 @@ const buildPerModelMiddlewares = (
 
 	if (!providerMetadataKey) return middlewares
 
-	const props: Record<string, unknown> = { ...providerOptions }
+	const props: Record<string, JSONValue> = { ...(providerOptions as Record<string, JSONValue>) }
 
 	switch (providerMetadataKey) {
 		case 'vertex': {
@@ -69,11 +75,20 @@ const buildPerModelMiddlewares = (
 export const wrapModel = (
 	model: LanguageModel,
 	type: ModelType,
-	modelConfig?: Pick<ModelDefinition, 'providerOptions' | 'thinking' | 'candidateOverrides' | 'evaluatorOverrides'>
+	modelConfig?: Pick<
+		ModelDefinition,
+		'provider' | 'providerOptions' | 'thinking' | 'candidateOverrides' | 'evaluatorOverrides'
+	>
 ) => {
 	if (modelConfig === undefined) return model
 
-	const middlewares = buildPerModelMiddlewares(model, modelConfig, type)
+	if (typeof model === 'string' || model.specificationVersion !== 'v3') {
+		return model
+	}
+
+	const providerMetadataKey = getProviderOptionsNamespace(model.provider)
+	const supportsReasoningExtraction = model.provider.startsWith('ollama.')
+	const middlewares = buildPerModelMiddlewares(modelConfig, providerMetadataKey, supportsReasoningExtraction, type)
 	if (middlewares.length > 0) {
 		return wrapLanguageModel({ model, middleware: middlewares })
 	}

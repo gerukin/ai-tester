@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Upgraded the runtime from Vercel AI SDK 4 to AI SDK 6 and refreshed the provider packages accordingly.
+- Structured outputs now run through AI SDK 6 `generateText` with `Output.object`, while keeping the existing on-disk schema format unchanged.
+- Tool definition YAML files still use `parameters:` for compatibility, but the runtime now maps them to AI SDK 6 `inputSchema` internally.
+- OpenAI models continue to use the chat-completions provider path internally; the upgrade does not switch ai-tester to the Responses API by default.
+- Ollama now runs through the OpenAI-compatible transport and normalizes `AI_TESTER_OLLAMA_BASE_URL` to the `/v1` endpoint automatically.
+- Raised the minimum supported `zod` version for this repo to `^3.25.76`.
+- Runs now fail instead of persisting invented prompt/completion token totals when supported providers expose partial raw usage data, including OpenAI-compatible, Anthropic, and Google/Vertex.
+- Cache token detail fields are now only persisted when the provider's raw usage payload actually reports them, avoiding invented zero cache counts.
+
 ## [0.15.0] - 2026-04-08
 
 > [!WARNING]
