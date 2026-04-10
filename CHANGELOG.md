@@ -9,9 +9,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - A repository-native offline automated test suite covering runtime flows, sync flows, markdown parsing, config validation, stats, OpenRouter helpers, and app bootstrap.
+- Headless `ai-tester` CLI subcommands for migrations, file-backed sync, missing test runs, missing evaluation runs, and stats queries.
+- CLI help output via `-h` / `--help`, stats query listing via `ai-tester stats --list`, and dry-run previews for `run-tests` and `run-evals`.
 
 ### Changed
 
+- Analysis query descriptions must now be unique because they can be selected exactly from the CLI.
 - Frontmatter parsing now trims leading whitespace before the actual prompt or test body, matching the installed local corpus while avoiding off-by-one extraction behavior.
 - Test parsing now treats only the last standalone `---` line as the start of evaluation instructions; earlier `---` usages remain part of the test content.
 

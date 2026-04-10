@@ -111,7 +111,21 @@ const testsConfigSchema = z.object({
 		evaluationsPerEvaluator: z.number().min(1).default(DEFAULT_EVALUATIONS),
 
 		/** Preset queries for analysis of the test DB */
-		analysisQueries: z.array(analysisQuery).optional(),
+		analysisQueries: z
+			.array(analysisQuery)
+			.superRefine((queries, ctx) => {
+				const seen = new Set<string>()
+				for (const query of queries) {
+					if (seen.has(query.description)) {
+						ctx.addIssue({
+							code: z.ZodIssueCode.custom,
+							message: `Duplicate analysis query description: ${query.description}`,
+						})
+					}
+					seen.add(query.description)
+				}
+			})
+			.optional(),
 	})
 
 export type TestsConfig = z.infer<typeof testsConfigSchema>

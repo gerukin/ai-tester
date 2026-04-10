@@ -1,50 +1,20 @@
 import { askYesNo } from '../utils/menus.js'
-import {
-	updatePromptsInDb,
-	updateTestsInDb,
-	runAllTests,
-	runAllEvaluations,
-	updateStructuredObjectsInDb,
-	updateToolsInDb,
-	updateProvidersInDb,
-	updateCurrenciesInDb,
-} from '../main/index.js'
-
-const updateAll = async () => {
-	await updateCurrenciesInDb()
-	await updateProvidersInDb()
-	await updateStructuredObjectsInDb()
-	await updateToolsInDb()
-	await updatePromptsInDb()
-	await updateTestsInDb()
-}
-
-const runMissingStuff = async (fnc: typeof runAllTests | typeof runAllEvaluations) => {
-	if (!(await askYesNo('This will first update the file-backed registry and sync the DB. Do you want to continue?')))
-		return
-
-	console.log() // empty line
-
-	await updateAll()
-	await fnc()
-
-	console.log() // empty line
-}
+import { runEvalsWithSync, runTestsWithSync, syncAll } from '../cli/actions.js'
 
 export const testsAndEvalsMenus = [
 	{
 		name: 'Update the database from files',
 		description: 'Synchronize currencies, providers, models, prompts, tests, structured objects, and tools with the database.',
-		action: updateAll,
+		action: syncAll,
 	},
 	{
 		name: 'Run missing tests',
 		description: 'Update the database, then execute all tests that have not yet been run.',
-		action: () => runMissingStuff(runAllTests),
+		action: () => runTestsWithSync({ confirmSync: askYesNo, confirmRun: askYesNo }),
 	},
 	{
 		name: 'Run missing evaluations',
 		description: 'Update the database, then execute all evaluations that have not yet been run.',
-		action: () => runMissingStuff(runAllEvaluations),
+		action: () => runEvalsWithSync({ confirmSync: askYesNo, confirmRun: askYesNo }),
 	},
 ]

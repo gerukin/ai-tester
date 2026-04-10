@@ -23,12 +23,40 @@ Now you will need to create the necessary prompts, tests, config file, provider 
 ## Running the program
 
 ```sh
-# This assumes the project is already built
+# This assumes the project is already built and opens the interactive menu
 npm run start
 
 # Or to recompile and run the project:
 npm run start:dev
 ```
+
+### CLI commands
+
+```sh
+# Show help
+ai-tester --help
+ai-tester stats --help
+
+# Run migrations
+ai-tester migrate
+
+# Sync file-backed state into the DB
+ai-tester sync
+
+# Dry-run the expensive run flows
+ai-tester run-tests --dry-run
+ai-tester run-evals --dry-run
+
+# Execute them headlessly
+ai-tester run-tests
+ai-tester run-evals
+
+# List and run configured analysis queries
+ai-tester stats --list
+ai-tester stats --query "My query description"
+```
+
+`ai-tester` with no arguments keeps the current interactive behavior. The `run-tests` and `run-evals` commands automatically sync currencies, providers, structured objects, tools, prompts, and tests before executing missing work.
 
 ## Automated tests
 

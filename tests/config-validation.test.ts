@@ -63,6 +63,35 @@ test('config loading rejects duplicate configured model references', async t => 
 	expectModuleFailure(env.runModule('config:getResolvedTestsConfig'), /Duplicate configured model reference/)
 })
 
+test('config loading rejects duplicate analysis query descriptions', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	await env.write(
+		'ai-tester.config.yaml',
+		[
+			'candidatesTemperature: 0.3',
+			'candidates: []',
+			'attempts: 1',
+			'requiredTags1: []',
+			'requiredTags2: []',
+			'prohibitedTags: []',
+			'evaluators: []',
+			'evaluatorsTemperature: 0.4',
+			'evaluationsPerEvaluator: 1',
+			'analysisQueries:',
+			'  - description: Duplicate query',
+			'    currency: USD',
+			'  - description: Duplicate query',
+			'    currency: USD',
+		].join('\n')
+	)
+
+	expectModuleFailure(env.runModule('config:getResolvedTestsConfig'), /Duplicate analysis query description/)
+})
+
 test('resolveTestsConfig filters unavailable configured models from tests and analysis queries', async t => {
 	const env = await createSyncTestEnv()
 	t.after(async () => {

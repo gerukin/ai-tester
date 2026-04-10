@@ -254,4 +254,7 @@ const createDefaultEvaluationRunnerDeps = async () => {
         state,
     };
 };
-export const runAllEvaluations = async () => runAllEvaluationsWithDeps(await createDefaultEvaluationRunnerDeps());
+export const runAllEvaluations = async ({ confirmRun } = {}) => runAllEvaluationsWithDeps({
+    ...(await createDefaultEvaluationRunnerDeps()),
+    ...(confirmRun ? { confirmRun } : {}),
+});

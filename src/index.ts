@@ -1,3 +1,6 @@
-import { runDefaultApp } from './bootstrap.js'
+import { runCli } from './cli/index.js'
 
-await runDefaultApp()
+const exitCode = await runCli(process.argv.slice(2))
+if (exitCode !== 0) {
+	process.exitCode = exitCode
+}

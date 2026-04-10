@@ -268,4 +268,7 @@ const createDefaultSessionRunnerDeps = async () => {
         state,
     };
 };
-export const runAllTests = async () => runAllTestsWithDeps(await createDefaultSessionRunnerDeps());
+export const runAllTests = async ({ confirmRun } = {}) => runAllTestsWithDeps({
+    ...(await createDefaultSessionRunnerDeps()),
+    ...(confirmRun ? { confirmRun } : {}),
+});

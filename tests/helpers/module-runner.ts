@@ -13,12 +13,16 @@ const captureConsole = async (fn: () => Promise<unknown>) => {
 	const tables: unknown[][] = []
 	const originalLog = console.log
 	const originalWarn = console.warn
+	const originalError = console.error
 	const originalTable = console.table
 
 	console.log = (...args) => {
 		logs.push(args)
 	}
 	console.warn = (...args) => {
+		logs.push(args)
+	}
+	console.error = (...args) => {
 		logs.push(args)
 	}
 	console.table = (...args) => {
@@ -31,6 +35,7 @@ const captureConsole = async (fn: () => Promise<unknown>) => {
 	} finally {
 		console.log = originalLog
 		console.warn = originalWarn
+		console.error = originalError
 		console.table = originalTable
 	}
 }
@@ -72,13 +77,52 @@ const operationMap = {
 			menuCalls += 1
 			return 'index-result'
 		}
+		const originalArgv = process.argv
 
 		try {
+			process.argv = [process.execPath, 'ai-tester']
 			await import('../../src/index.js')
 			return { menuCalls }
 		} finally {
+			process.argv = originalArgv
 			delete globalThis.__AI_TESTER_TEST_MENU_LOADER__
 		}
+	},
+	'cli:run': async () => {
+		const args = (payload.args ?? {}) as { argv?: string[] }
+		const { runCli } = await import('../../src/cli/index.js')
+		return captureConsole(async () => ({ exitCode: await runCli(args.argv ?? []) }))
+	},
+	'cli:dispatch': async () => {
+		const args = (payload.args ?? {}) as { argv?: string[] }
+		const calls: Array<{ name: string; dryRun?: boolean; description?: string }> = []
+		const { runCli } = await import('../../src/cli/index.js')
+		return captureConsole(async () => ({
+			exitCode: await runCli(args.argv ?? [], {
+				runInteractive: async () => {
+					calls.push({ name: 'interactive' })
+				},
+				syncAll: async () => {
+					calls.push({ name: 'sync' })
+				},
+				runTestsWithSync: async options => {
+					calls.push({ name: 'run-tests', dryRun: options?.dryRun })
+				},
+				runEvalsWithSync: async options => {
+					calls.push({ name: 'run-evals', dryRun: options?.dryRun })
+				},
+				listStatsQueries: async () => {
+					calls.push({ name: 'stats:list' })
+				},
+				runStatsQueryByDescription: async description => {
+					calls.push({ name: 'stats:query', description })
+				},
+				runMigrations: async () => {
+					calls.push({ name: 'migrate' })
+				},
+			}),
+			calls,
+		}))
 	},
 	'openRouter:getModels': async () => {
 		const args = (payload.args ?? {}) as {

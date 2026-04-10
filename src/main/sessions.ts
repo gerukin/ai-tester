@@ -49,6 +49,10 @@ type SessionRunnerDeps = {
 	state: Pick<typeof import('../utils/state.js').state, 'startRun' | 'endRun'>
 }
 
+type RunAllTestsOptions = {
+	confirmRun?: SessionRunnerDeps['confirmRun']
+}
+
 const getMissingTests = async (
 	db: SessionRunnerDeps['db'],
 	testsConfig: SessionRunnerDeps['testsConfig']
@@ -423,4 +427,8 @@ const createDefaultSessionRunnerDeps = async (): Promise<SessionRunnerDeps> => {
 	}
 }
 
-export const runAllTests = async () => runAllTestsWithDeps(await createDefaultSessionRunnerDeps())
+export const runAllTests = async ({ confirmRun }: RunAllTestsOptions = {}) =>
+	runAllTestsWithDeps({
+		...(await createDefaultSessionRunnerDeps()),
+		...(confirmRun ? { confirmRun } : {}),
+	})

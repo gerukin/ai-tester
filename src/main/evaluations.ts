@@ -46,6 +46,10 @@ type EvaluationRunnerDeps = {
 	state: Pick<typeof import('../utils/state.js').state, 'startRun' | 'endRun'>
 }
 
+type RunAllEvaluationsOptions = {
+	confirmRun?: EvaluationRunnerDeps['confirmRun']
+}
+
 const getMissingEvaluations = async (
 	db: EvaluationRunnerDeps['db'],
 	testsConfig: EvaluationRunnerDeps['testsConfig']
@@ -461,4 +465,8 @@ const createDefaultEvaluationRunnerDeps = async (): Promise<EvaluationRunnerDeps
 	}
 }
 
-export const runAllEvaluations = async () => runAllEvaluationsWithDeps(await createDefaultEvaluationRunnerDeps())
+export const runAllEvaluations = async ({ confirmRun }: RunAllEvaluationsOptions = {}) =>
+	runAllEvaluationsWithDeps({
+		...(await createDefaultEvaluationRunnerDeps()),
+		...(confirmRun ? { confirmRun } : {}),
+	})

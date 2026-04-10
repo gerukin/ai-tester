@@ -134,6 +134,8 @@ Analysis queries are a way to pre-define queries to run on the database. These q
 - Cost per 100 sessions: The cost of the evaluations per 100 sessions (in the specified currency)
 - Total cost: The total cost of the evaluations (in the specified currency)
 
+Analysis query descriptions must be unique. The CLI uses the exact description string for `ai-tester stats --query "<description>"`, so duplicate descriptions are rejected during config validation.
+
 > [!NOTE]
 > Only active tests with completed evaluations are shown in the analysis queries.
 >

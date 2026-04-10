@@ -82,7 +82,21 @@ const testsConfigSchema = z.object({
     /** Total number of evaluations per response per evaluator */
     evaluationsPerEvaluator: z.number().min(1).default(DEFAULT_EVALUATIONS),
     /** Preset queries for analysis of the test DB */
-    analysisQueries: z.array(analysisQuery).optional(),
+    analysisQueries: z
+        .array(analysisQuery)
+        .superRefine((queries, ctx) => {
+        const seen = new Set();
+        for (const query of queries) {
+            if (seen.has(query.description)) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    message: `Duplicate analysis query description: ${query.description}`,
+                });
+            }
+            seen.add(query.description);
+        }
+    })
+        .optional(),
 });
 export const testsConfig = testsConfigSchema
     .parse(yaml.parse(fs.readFileSync(envConfig.AI_TESTER_CONFIG_PATH, 'utf-8')));
