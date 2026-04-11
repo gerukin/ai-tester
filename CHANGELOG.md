@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-04-11
+
+### Added
+
+- Runtime CLI overrides let headless `run-tests` and `run-evals` shallow-replace test and evaluation config fields from inline JSON or a JSON file.
+- Dry-run test and evaluation commands can now include missing-work counts with `--include-counts`, using a temporary database copy so the real database is not mutated.
+- Stats can now run ad hoc analysis queries from inline JSON or a JSON file, with dry-run validation for configured and ad hoc queries.
+- A packaged `ai-tester` agent skill can now be synchronized into consuming projects with `ai-tester skills sync`.
+
 ## [0.16.0] - 2026-04-11
 
 ### Added
@@ -179,7 +188,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - 🎉 Version `0.9.0` is out... with all the base features. It isn't quite yet stable or tested enough to be relied upon.
 
-[Unreleased]: https://github.com/gerukin/ai-tester/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/gerukin/ai-tester/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/gerukin/ai-tester/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/gerukin/ai-tester/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/gerukin/ai-tester/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/gerukin/ai-tester/compare/v0.13.0...v0.14.0
