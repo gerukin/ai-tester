@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Frontmatter parsing now trims leading whitespace before the actual prompt or test body, matching the installed local corpus while avoiding off-by-one extraction behavior.
 - Test parsing now treats only the last standalone `---` line as the start of evaluation instructions; earlier `---` usages remain part of the test content.
 - Structured-object test sessions and evaluator judgments now persist reasoning traces when providers return them.
+- Prompt and test sync now fail fast when replacement expansion leaves unresolved non-runtime placeholders.
 
 ## [0.15.0] - 2026-04-09
 

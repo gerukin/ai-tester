@@ -14,6 +14,7 @@ import {
 	TagsValidation,
 	ReplacementsValidation,
 	getSectionsFromMarkdownContent,
+	assertNoUnresolvedStaticPlaceholders,
 } from '../utils/markdown.js'
 import { generateHash } from '../utils/crypto.js'
 import { db } from '../database/db.js'
@@ -113,6 +114,8 @@ export const updatePromptsInDb = async () => {
 			const contentVersions = getVersionsFromReplacements(prompt.template, prompt.replacements)
 
 			for (const contentVersion of contentVersions) {
+				assertNoUnresolvedStaticPlaceholders(contentVersion, `prompt ${id}`)
+
 				// get a list of all special tags used, sort, and join them (they should be part of the hash)
 				const specialTags = Array.from(SPECIAL_TAGS.keys())
 					.filter(tag => prompt.tags?.includes(tag) ?? false)

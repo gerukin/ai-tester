@@ -16,6 +16,7 @@ import {
 	getSectionsFromMarkdownContent,
 	sectionsToNormalizedStrings,
 	getReferencedFiles,
+	assertNoUnresolvedStaticPlaceholders,
 } from '../utils/markdown.js'
 import { generateHash } from '../utils/crypto.js'
 import { db } from '../database/db.js'
@@ -45,7 +46,7 @@ const TestValidation = z.intersection(
 		template: z.string(),
 	})
 )
-type Test = z.infer<typeof TestValidation>
+type Test = z.infer<typeof TestValidation> & { filePath: string }
 
 /**
  * Fetches a test from a file, and optionally replaces placeholders with values.
@@ -65,6 +66,7 @@ const getTestFromFile = async (filePath: string): Promise<Test> => {
 
 	return {
 		template,
+		filePath,
 		tags: cnf.tags,
 		replacements: cnf.replacements,
 		systemPrompts: cnf.systemPrompts,
@@ -143,6 +145,8 @@ export const updateTestsInDb = async () => {
 			const contentVersions = getVersionsFromReplacements(test.template, test.replacements)
 
 			for (const contentVersion of contentVersions) {
+				assertNoUnresolvedStaticPlaceholders(contentVersion, `test ${test.filePath}`)
+
 				// get a list of all special tags used, sort, and join them (they should be part of the hash)
 				const specialTags = Array.from(SPECIAL_TAGS.keys())
 					.filter(tag => test.tags?.includes(tag) ?? false)

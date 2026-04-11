@@ -6,10 +6,12 @@ import test from 'node:test'
 
 import {
 	ReplacementsValidation,
+	assertNoUnresolvedStaticPlaceholders,
 	extractFrontMatterAndTemplate,
 	getEvalInstrFromSections,
 	getReferencedFiles,
 	getSectionsFromMarkdownContent,
+	getUnresolvedStaticPlaceholders,
 	getVersionsFromReplacements,
 	sectionsToAiMessages,
 	sectionsToNormalizedStrings,
@@ -68,6 +70,32 @@ test('getVersionsFromReplacements expands scalar, array, and null replacements i
 		]
 	)
 	assert.throws(() => getVersionsFromReplacements('Name: `{{name}}`', 'Alice'), /Current key is required/)
+})
+
+test('unresolved placeholder validation rejects non-runtime placeholders and allows underscore placeholders', () => {
+	assert.deepStrictEqual(
+		getUnresolvedStaticPlaceholders(
+			[
+				'Hello `{{ name }}`.',
+				'Hello again {{name}}.',
+				'Runtime placeholders stay: `{{_file:fixtures/a.txt}}`, `{{_actualResponse}}`.',
+				'Missing: `{{ tone }}`.',
+			].join('\n')
+		),
+		['{{name}}', '{{tone}}']
+	)
+
+	assert.doesNotThrow(() =>
+		assertNoUnresolvedStaticPlaceholders(
+			'Runtime placeholders stay: `{{_evaluationInstructions}}`, `{{ _customRuntime }}`, `{{_file:a.txt}}`.',
+			'evaluator prompt'
+		)
+	)
+
+	assert.throws(
+		() => assertNoUnresolvedStaticPlaceholders('Use `{{missing}}` and {{ other }}.', 'prompt helpful-en'),
+		/Unresolved placeholders in prompt helpful-en: \{\{missing\}\}, \{\{other\}\}/
+	)
 })
 
 test('getReferencedFiles deduplicates, sorts, and hashes referenced files', async t => {

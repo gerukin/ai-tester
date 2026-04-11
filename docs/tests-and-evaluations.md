@@ -40,6 +40,8 @@ Special tags start with a `_` and are used to trigger specific actions in the sy
 
 Replacements can be used in tests and evaluations to provide dynamic content. They are used to replace placeholders in the prompt text with actual values.
 
+After replacements are applied, any remaining non-runtime placeholder will fail sync. Runtime and special placeholders are reserved by using a leading underscore, such as `{{_file:path/to/file.jpg}}`; these `_...` placeholders are allowed to remain unresolved during static replacement expansion.
+
 ### Simple pattern
 
 Create 2 versions of the same prompt with different replacements:

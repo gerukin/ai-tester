@@ -6,7 +6,7 @@ import { and, eq, ne, inArray, notInArray } from 'drizzle-orm';
 import z from 'zod';
 import { envConfig, SPECIAL_TAGS } from '../config/index.js';
 import { listAllMdFiles } from '../utils/files.js';
-import { extractFrontMatterAndTemplate, getVersionsFromReplacements, TagsValidation, ReplacementsValidation, getSectionsFromMarkdownContent, sectionsToNormalizedStrings, getReferencedFiles, } from '../utils/markdown.js';
+import { extractFrontMatterAndTemplate, getVersionsFromReplacements, TagsValidation, ReplacementsValidation, getSectionsFromMarkdownContent, sectionsToNormalizedStrings, getReferencedFiles, assertNoUnresolvedStaticPlaceholders, } from '../utils/markdown.js';
 import { generateHash } from '../utils/crypto.js';
 import { db } from '../database/db.js';
 import { schema } from '../database/schema.js';
@@ -42,6 +42,7 @@ const getTestFromFile = async (filePath) => {
     const cnf = ConfigValidation.parse(templateConfig);
     return {
         template,
+        filePath,
         tags: cnf.tags,
         replacements: cnf.replacements,
         systemPrompts: cnf.systemPrompts,
@@ -99,6 +100,7 @@ export const updateTestsInDb = async () => {
         for (const test of _tests.values()) {
             const contentVersions = getVersionsFromReplacements(test.template, test.replacements);
             for (const contentVersion of contentVersions) {
+                assertNoUnresolvedStaticPlaceholders(contentVersion, `test ${test.filePath}`);
                 // get a list of all special tags used, sort, and join them (they should be part of the hash)
                 const specialTags = Array.from(SPECIAL_TAGS.keys())
                     .filter(tag => test.tags?.includes(tag) ?? false)

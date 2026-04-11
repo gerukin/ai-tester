@@ -16,6 +16,7 @@ export const ReplacementsValidation = z.union([
     z.record(ReplacementValueValidation),
     z.array(z.record(ReplacementValueValidation))
 ]);
+const PLACEHOLDER_REGEX = /\{\{\s*([^{}\n]+?)\s*\}\}/g;
 const USER_MESSAGE_MARKER = '# 👤', ASSISTANT_MESSAGE_MARKER = '# 🤖', EVALUATION_MARKER = '---';
 const getLastStandaloneEvaluationMarkerIndex = (content) => {
     let lastIndex;
@@ -69,6 +70,26 @@ export const getVersionsFromReplacements = (template, replacements, currentKey) 
         return versions;
     }
     return [template];
+};
+/**
+ * Find unresolved static placeholders in markdown content.
+ * Placeholders starting with `_` are reserved for runtime/special expansion and are intentionally allowed.
+ */
+export const getUnresolvedStaticPlaceholders = (content) => {
+    const placeholders = new Set();
+    for (const match of content.matchAll(PLACEHOLDER_REGEX)) {
+        const placeholderName = match[1]?.trim();
+        if (!placeholderName || placeholderName.startsWith('_'))
+            continue;
+        placeholders.add(`{{${placeholderName}}}`);
+    }
+    return Array.from(placeholders).sort();
+};
+export const assertNoUnresolvedStaticPlaceholders = (content, context) => {
+    const placeholders = getUnresolvedStaticPlaceholders(content);
+    if (placeholders.length > 0) {
+        throw new Error(`Unresolved placeholders in ${context}: ${placeholders.join(', ')}`);
+    }
 };
 /**
  * Get all files referenced in the markdown content.

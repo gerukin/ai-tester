@@ -30,6 +30,8 @@ export const ReplacementsValidation = z.union([
  */
 type Replacements = z.infer<typeof ReplacementsValidation>
 
+const PLACEHOLDER_REGEX = /\{\{\s*([^{}\n]+?)\s*\}\}/g
+
 export type SectionType = 'system' | 'user' | 'assistant' | 'evaluation'
 export type TemplateSections = {
 	type: SectionType
@@ -117,6 +119,29 @@ export const getVersionsFromReplacements = (
 	}
 
 	return [template]
+}
+
+/**
+ * Find unresolved static placeholders in markdown content.
+ * Placeholders starting with `_` are reserved for runtime/special expansion and are intentionally allowed.
+ */
+export const getUnresolvedStaticPlaceholders = (content: string): string[] => {
+	const placeholders = new Set<string>()
+
+	for (const match of content.matchAll(PLACEHOLDER_REGEX)) {
+		const placeholderName = match[1]?.trim()
+		if (!placeholderName || placeholderName.startsWith('_')) continue
+		placeholders.add(`{{${placeholderName}}}`)
+	}
+
+	return Array.from(placeholders).sort()
+}
+
+export const assertNoUnresolvedStaticPlaceholders = (content: string, context: string) => {
+	const placeholders = getUnresolvedStaticPlaceholders(content)
+	if (placeholders.length > 0) {
+		throw new Error(`Unresolved placeholders in ${context}: ${placeholders.join(', ')}`)
+	}
 }
 
 /**

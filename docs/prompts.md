@@ -28,3 +28,5 @@ The file name is not considered important (and can be changed), and each `id` mu
 Tags can be added/removed in the file, and are synchronized with all versions of the prompt in the DB.
 
 Prompts can use replacements, see [tests](tests-and-evaluations.md#replacements), and follow the same rules (which can lead to multiple current versions at once).
+
+After replacements are applied, prompt sync rejects unresolved placeholders unless their name starts with `_`. Evaluator prompts can therefore keep runtime placeholders such as `{{_evaluationInstructions}}` and `{{_actualResponse}}`, while ordinary placeholders must be defined in `replacements`.

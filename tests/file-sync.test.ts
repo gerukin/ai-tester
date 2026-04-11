@@ -509,6 +509,26 @@ test('prompt sync rejects invalid evaluator prompt structure', async t => {
 	expectSyncFailure(env.runSync(['prompts']), /must have sections system, and user/)
 })
 
+test('prompt sync rejects unresolved non-runtime placeholders after replacement expansion', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	await env.write(
+		'data/prompts/helpful-en.md',
+		[
+			'---',
+			'id: helpful-en',
+			'---',
+			'You are `{{tone}}`.',
+			'Runtime placeholders like `{{_futureRuntime}}` are allowed.',
+		].join('\n')
+	)
+
+	expectSyncFailure(env.runSync(['prompts']), /Unresolved placeholders in prompt helpful-en: \{\{tone\}\}/)
+})
+
 test('tool and structured-object sync version and deactivate rows as files change', async t => {
 	const env = await createSyncTestEnv()
 	t.after(async () => {
@@ -687,6 +707,35 @@ test('test sync versions content based on file references and linked tool metada
 	const secondTestVersions = await env.db.select().from(schema.testVersions)
 	assert.strictEqual(secondTestVersions.length, 2)
 	assert.strictEqual(secondTestVersions.filter(version => version.active).length, 1)
+})
+
+test('test sync rejects unresolved non-runtime placeholders after replacement expansion', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	await env.write(
+		'data/tests/broken.md',
+		[
+			'---',
+			'systemPrompts:',
+			'  - helpful-en',
+			'---',
+			'# 👤',
+			'',
+			'Question: `{{question}}`',
+			'Runtime placeholders like `{{_file:fixtures/brief.txt}}` are allowed.',
+			'',
+			'---',
+			'The answer should mention `{{answer}}`.',
+		].join('\n')
+	)
+
+	expectSyncFailure(
+		env.runSync(['tests']),
+		/Unresolved placeholders in test .*broken\.md: \{\{answer\}\}, \{\{question\}\}/
+	)
 })
 
 test('test sync deactivates removed files and reactivates restored versions including evaluation prompts', async t => {
