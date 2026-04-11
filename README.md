@@ -20,6 +20,11 @@ Now you will need to create the necessary prompts, tests, config file, provider 
 > [!IMPORTANT]
 > Put all files (except `.env` and `.env.local`) which are not committed to the repository in the `.local` directory.
 
+## Skills
+
+The distributable skill in `skills/ai-tester` is maintained for agents working in consuming projects that depend on `ai-tester`.
+It is separate from repo-local contributor skills under `.agents/skills`.
+
 ## Running the program
 
 ```sh
@@ -42,6 +47,10 @@ ai-tester migrate
 
 # Sync file-backed state into the DB
 ai-tester sync
+
+# Install the packaged ai-tester skill into a consuming project
+ai-tester skills sync
+ai-tester skills sync --replace
 
 # Dry-run the expensive run flows
 ai-tester run-tests --dry-run

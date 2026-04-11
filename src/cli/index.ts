@@ -7,9 +7,14 @@ type RunWithSyncCliOptions = {
 	configOverridesFile?: string
 }
 
+type SyncSkillCliOptions = {
+	replace?: boolean
+}
+
 type CliDeps = {
 	runInteractive: () => Promise<unknown>
 	syncAll: () => Promise<void>
+	syncSkill: (options?: SyncSkillCliOptions) => Promise<void>
 	runTestsWithSync: (options?: RunWithSyncCliOptions) => Promise<void>
 	runEvalsWithSync: (options?: RunWithSyncCliOptions) => Promise<void>
 	listStatsQueries: () => Promise<void>
@@ -27,6 +32,7 @@ const ROOT_HELP = `Usage: ai-tester [command] [options]
 Commands:
   migrate               Run outstanding database migrations.
   sync                  Synchronize currencies, providers, structured objects, tools, prompts, and tests.
+  skills sync           Copy the packaged ai-tester skill into .agents/skills/ai-tester.
   run-tests             Sync first, then run missing tests.
   run-evals             Sync first, then run missing evaluations.
   stats --list          List runnable analysis query descriptions.
@@ -49,6 +55,29 @@ const SYNC_HELP = `Usage: ai-tester sync
 Synchronize currencies, providers, structured objects, tools, prompts, and tests.
 
 Options:
+  -h, --help            Show this help message.`
+
+const SKILLS_HELP = `Usage:
+  ai-tester skills sync [--replace]
+
+Manage packaged ai-tester skills.
+
+Commands:
+  sync                  Copy the packaged ai-tester skill into .agents/skills/ai-tester.
+
+Options:
+  -h, --help            Show this help message.`
+
+const SKILLS_SYNC_HELP = `Usage: ai-tester skills sync [--replace]
+
+Copy the packaged ai-tester skill into .agents/skills/ai-tester.
+
+If the destination already exists, interactive runs ask before replacing it.
+Unattended runs fail unless --replace is set.
+Use --replace to replace the destination without confirmation.
+
+Options:
+  --replace             Replace .agents/skills/ai-tester without interactive confirmation.
   -h, --help            Show this help message.`
 
 const RUN_TESTS_HELP = `Usage: ai-tester run-tests [--dry-run] [--include-counts] [--config-overrides <json> | --config-overrides-file <path>]
@@ -96,6 +125,7 @@ const isHelpFlag = (value: string) => value === '-h' || value === '--help'
 const createDefaultDeps = (): CliDeps => ({
 	runInteractive: async () => (await import('../bootstrap.js')).runDefaultApp(),
 	syncAll: async () => (await import('./actions.js')).syncAll(),
+	syncSkill: async options => (await import('./actions.js')).syncSkill(options),
 	runTestsWithSync: async options => (await import('./actions.js')).runTestsWithSync(options),
 	runEvalsWithSync: async options => (await import('./actions.js')).runEvalsWithSync(options),
 	listStatsQueries: async () => (await import('./actions.js')).listStatsQueries(),
@@ -223,6 +253,27 @@ const parseStatsArgs = (args: string[]) => {
 	return { help: false, shouldList, queryName, queryJson, queryFile, dryRun }
 }
 
+const parseSkillsArgs = (args: string[]) => {
+	if (args.length === 0 || isHelpFlag(args[0]!)) return { help: true, sync: false, replace: false }
+
+	const [subcommand, ...rest] = args
+	if (subcommand !== 'sync') {
+		throw new CliUsageError(`Unknown skills command: ${subcommand}`)
+	}
+
+	let replace = false
+	for (const arg of rest) {
+		if (arg === '--replace') {
+			replace = true
+			continue
+		}
+		if (isHelpFlag(arg)) return { help: true, sync: true, replace }
+		throw new CliUsageError(`Unknown option for skills sync: ${arg}`)
+	}
+
+	return { help: false, sync: true, replace }
+}
+
 const printHelp = (text: string) => {
 	console.log(text)
 }
@@ -258,6 +309,16 @@ export const runCli = async (argv: string[], deps: CliDeps = createDefaultDeps()
 				ensureNoExtraArgs(command, rest)
 				await deps.syncAll()
 				return 0
+
+			case 'skills': {
+				const parsed = parseSkillsArgs(rest)
+				if (parsed.help) {
+					printHelp(parsed.sync ? SKILLS_SYNC_HELP : SKILLS_HELP)
+					return 0
+				}
+				await deps.syncSkill({ replace: parsed.replace })
+				return 0
+			}
 
 			case 'run-tests': {
 				const parsed = parseRunWithOverridesArgs(command, rest)

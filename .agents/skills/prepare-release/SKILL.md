@@ -10,6 +10,8 @@ Use this skill when preparing or repairing an `ai-tester` release. Keep the work
 ## Release Invariants
 
 - Treat `package.json`, `CHANGELOG.md`, and git tags as the release sources of truth.
+- Treat `skills/ai-tester/SKILL.md` as user-facing guidance for consuming projects, not contributor guidance for this library repo.
+- Before release, check whether `skills/ai-tester/SKILL.md` fully reflects recent user-facing package, CLI, docs, config, migration, and workflow changes.
 - Use `vX.Y.Z` for git tags and changelog commit messages.
 - Use `X.Y.Z` without `v` for `CHANGELOG.md` headings.
 - Prefer the latest `vX.Y.Z` tag as the release baseline.

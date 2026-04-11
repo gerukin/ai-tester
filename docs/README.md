@@ -16,6 +16,21 @@ npm run start
 > [!NOTE]
 > This uses the default runtime, Node.
 
+## Agent skill
+
+If you use Codex or another agent with local skills, install the packaged `ai-tester` skill into your project:
+
+```sh
+ai-tester skills sync
+```
+
+If `.agents/skills/ai-tester` already exists, the command asks before replacing it in an interactive terminal.
+Unattended runs fail unless `--replace` is set:
+
+```sh
+ai-tester skills sync --replace
+```
+
 ## Getting started
 
 In your root directory, copy the `package.json` file from the `example` directory. Then run:

@@ -8,6 +8,11 @@ for (const [key, value] of Object.entries(payload.env ?? {})) {
 	process.env[key] = value
 }
 
+const runnerArgs = (payload.args ?? {}) as { cwd?: string }
+if (runnerArgs.cwd !== undefined) {
+	process.chdir(runnerArgs.cwd)
+}
+
 const captureConsole = async (fn: () => Promise<unknown>) => {
 	const logs: unknown[][] = []
 	const tables: unknown[][] = []
@@ -99,6 +104,7 @@ const operationMap = {
 			name: string
 			dryRun?: boolean
 			includeCounts?: boolean
+			replace?: boolean
 			description?: string
 			json?: string
 			filePath?: string
@@ -113,6 +119,9 @@ const operationMap = {
 				},
 				syncAll: async () => {
 					calls.push({ name: 'sync' })
+				},
+				syncSkill: async options => {
+					calls.push({ name: 'skills:sync', replace: options?.replace })
 				},
 				runTestsWithSync: async options => {
 					calls.push({
@@ -158,6 +167,35 @@ const operationMap = {
 			}),
 			calls,
 		}))
+	},
+	'actions:syncSkill': async () => {
+		const args = (payload.args ?? {}) as {
+			replace?: boolean
+			cwd?: string
+			sourceDir?: string
+			confirmReplace?: boolean
+			isInteractive?: boolean
+		}
+		const { syncSkill } = await import('../../src/cli/actions.js')
+		return captureConsole(async () => {
+			let confirmCalls = 0
+			const messages: string[] = []
+			await syncSkill({
+				replace: args.replace,
+				cwd: args.cwd,
+				sourceDir: args.sourceDir,
+				isInteractive: args.isInteractive,
+				confirmReplace:
+					args.confirmReplace === undefined
+						? undefined
+						: async message => {
+								confirmCalls += 1
+								messages.push(message)
+								return args.confirmReplace!
+						  },
+			})
+			return { confirmCalls, messages }
+		})
 	},
 	'actions:runTestsWithSyncCancelled': async () => {
 		const { runTestsWithSync } = await import('../../src/cli/actions.js')

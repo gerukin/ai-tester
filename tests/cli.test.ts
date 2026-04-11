@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import test from 'node:test'
 
 import { schema } from '../src/database/schema.js'
@@ -85,6 +87,20 @@ test('cli dispatch routes commands and forwards dry-run and query arguments', as
 	assert.strictEqual(sync.result.exitCode, 0)
 	assert.deepStrictEqual(sync.result.calls, [{ name: 'sync' }])
 
+	const skillsSync = expectModuleSuccess(env.runModule('cli:dispatch', { argv: ['skills', 'sync'] })) as {
+		result: { exitCode: number; calls: Array<{ name: string; replace?: boolean }> }
+	}
+	assert.strictEqual(skillsSync.result.exitCode, 0)
+	assert.deepStrictEqual(skillsSync.result.calls, [{ name: 'skills:sync', replace: false }])
+
+	const skillsSyncReplace = expectModuleSuccess(
+		env.runModule('cli:dispatch', { argv: ['skills', 'sync', '--replace'] })
+	) as {
+		result: { exitCode: number; calls: Array<{ name: string; replace?: boolean }> }
+	}
+	assert.strictEqual(skillsSyncReplace.result.exitCode, 0)
+	assert.deepStrictEqual(skillsSyncReplace.result.calls, [{ name: 'skills:sync', replace: true }])
+
 	const migrate = expectModuleSuccess(env.runModule('cli:dispatch', { argv: ['migrate'] })) as {
 		result: { exitCode: number; calls: Array<{ name: string }> }
 	}
@@ -142,6 +158,20 @@ test('cli help works at the root and subcommand level', async t => {
 	assert.strictEqual(statsHelp.result.exitCode, 0)
 	assert.match(String(statsHelp.logs[0]?.[0]), /ai-tester stats --list/)
 
+	const skillsHelp = expectModuleSuccess(env.runModule('cli:run', { argv: ['skills', '--help'] })) as {
+		result: { exitCode: number }
+		logs: string[][]
+	}
+	assert.strictEqual(skillsHelp.result.exitCode, 0)
+	assert.match(String(skillsHelp.logs[0]?.[0]), /ai-tester skills sync \[--replace\]/)
+
+	const skillsSyncHelp = expectModuleSuccess(env.runModule('cli:run', { argv: ['skills', 'sync', '-h'] })) as {
+		result: { exitCode: number }
+		logs: string[][]
+	}
+	assert.strictEqual(skillsSyncHelp.result.exitCode, 0)
+	assert.match(String(skillsSyncHelp.logs[0]?.[0]), /--replace\s+Replace \.agents\/skills\/ai-tester/)
+
 	const statsHelpAfterList = expectModuleSuccess(env.runModule('cli:run', { argv: ['stats', '--list', '--help'] })) as {
 		result: { exitCode: number }
 		logs: string[][]
@@ -157,6 +187,113 @@ test('cli help works at the root and subcommand level', async t => {
 	}
 	assert.strictEqual(statsHelpAfterQuery.result.exitCode, 0)
 	assert.match(String(statsHelpAfterQuery.logs[0]?.[0]), /ai-tester stats --query <name>/)
+})
+
+test('cli skills sync creates the packaged ai-tester skill', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	const output = expectModuleSuccess(env.runModule('actions:syncSkill', { cwd: env.rootDir, isInteractive: false })) as {
+		result: { confirmCalls: number; messages: string[] }
+		logs: string[][]
+	}
+
+	const skillPath = path.join(env.rootDir, '.agents/skills/ai-tester/SKILL.md')
+	const runningReferencePath = path.join(env.rootDir, '.agents/skills/ai-tester/references/running.md')
+	const skillContent = await fs.readFile(skillPath, 'utf8')
+	const runningReferenceContent = await fs.readFile(runningReferencePath, 'utf8')
+
+	assert.strictEqual(output.result.confirmCalls, 0)
+	assert.deepStrictEqual(output.result.messages, [])
+	assert.match(String(output.logs[0]?.[0]), /Created ai-tester skill/)
+	assert.match(skillContent, /name: ai-tester/)
+	assert.match(skillContent, /current project/)
+	assert.match(skillContent, /references\/running\.md/)
+	assert.match(runningReferenceContent, /Dry Runs/)
+})
+
+test('cli skills sync can cancel replacement after confirmation', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	const skillPath = await env.write('.agents/skills/ai-tester/SKILL.md', 'local edit\n')
+	const output = expectModuleSuccess(
+		env.runModule('actions:syncSkill', { cwd: env.rootDir, confirmReplace: false, isInteractive: true })
+	) as {
+		result: { confirmCalls: number; messages: string[] }
+		logs: string[][]
+	}
+
+	assert.strictEqual(output.result.confirmCalls, 1)
+	assert.match(output.result.messages[0] ?? '', /Replace .*\.agents\/skills\/ai-tester/)
+	assert.match(String(output.logs[0]?.[0]), /Skill sync cancelled/)
+	assert.strictEqual(await fs.readFile(skillPath, 'utf8'), 'local edit\n')
+})
+
+test('cli skills sync replaces the existing skill after confirmation', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	const skillPath = await env.write('.agents/skills/ai-tester/SKILL.md', 'local edit\n')
+	const output = expectModuleSuccess(
+		env.runModule('actions:syncSkill', { cwd: env.rootDir, confirmReplace: true, isInteractive: true })
+	) as {
+		result: { confirmCalls: number; messages: string[] }
+		logs: string[][]
+	}
+
+	const skillContent = await fs.readFile(skillPath, 'utf8')
+	assert.strictEqual(output.result.confirmCalls, 1)
+	assert.match(String(output.logs[0]?.[0]), /Replaced ai-tester skill/)
+	assert.match(skillContent, /name: ai-tester/)
+	assert.doesNotMatch(skillContent, /local edit/)
+})
+
+test('cli skills sync --replace bypasses confirmation and removes stale destination files', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	const skillPath = await env.write('.agents/skills/ai-tester/SKILL.md', 'local edit\n')
+	const stalePath = await env.write('.agents/skills/ai-tester/stale.md', 'stale\n')
+	const output = expectModuleSuccess(
+		env.runModule('actions:syncSkill', { cwd: env.rootDir, replace: true, confirmReplace: false, isInteractive: false })
+	) as {
+		result: { confirmCalls: number }
+		logs: string[][]
+	}
+
+	const skillContent = await fs.readFile(skillPath, 'utf8')
+	assert.strictEqual(output.result.confirmCalls, 0)
+	assert.match(String(output.logs[0]?.[0]), /Replaced ai-tester skill/)
+	assert.match(skillContent, /name: ai-tester/)
+	await assert.rejects(fs.access(stalePath))
+})
+
+test('cli skills sync fails non-interactive replacement without --replace', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	await env.write('.agents/skills/ai-tester/SKILL.md', 'local edit\n')
+	const output = expectModuleSuccess(
+		env.runModule('cli:run', { cwd: env.rootDir, argv: ['skills', 'sync'] })
+	) as {
+		result: { exitCode: number }
+		logs: string[][]
+	}
+
+	assert.strictEqual(output.result.exitCode, 2)
+	assert.match(String(output.logs[0]?.[0]), /already exists/)
+	assert.match(String(output.logs[0]?.[0]), /--replace/)
 })
 
 test('cli returns usage errors for invalid commands and invalid stats options', async t => {

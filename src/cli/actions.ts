@@ -25,7 +25,85 @@ type RunWithSyncOptions = {
 	confirmRun?: ConfirmFn
 }
 
+type SyncSkillOptions = {
+	replace?: boolean
+	cwd?: string
+	sourceDir?: string
+	confirmReplace?: ConfirmFn
+	isInteractive?: boolean
+}
+
 const alwaysYes: ConfirmFn = async () => true
+
+const DISTRIBUTABLE_SKILL_NAME = 'ai-tester'
+const DISTRIBUTABLE_SKILL_DESTINATION = path.join('.agents', 'skills', DISTRIBUTABLE_SKILL_NAME)
+const DISTRIBUTABLE_SKILL_ENTRY = 'SKILL.md'
+
+const resolveDistributableSkillSourceDir = () => {
+	let currentDir = fileURLToPath(new URL('.', import.meta.url))
+
+	while (true) {
+		const skillDir = path.join(currentDir, 'skills', DISTRIBUTABLE_SKILL_NAME)
+		const packageJsonPath = path.join(currentDir, 'package.json')
+		const skillEntryPath = path.join(skillDir, DISTRIBUTABLE_SKILL_ENTRY)
+		if (fs.existsSync(packageJsonPath) && fs.existsSync(skillEntryPath)) {
+			return skillDir
+		}
+
+		const parentDir = path.dirname(currentDir)
+		if (parentDir === currentDir) {
+			throw new Error(`Unable to locate canonical ${DISTRIBUTABLE_SKILL_NAME} skill source.`)
+		}
+		currentDir = parentDir
+	}
+}
+
+const isTerminalInteractive = () => Boolean(process.stdin.isTTY && process.stdout.isTTY)
+
+export const syncSkill = async ({
+	replace = false,
+	cwd = process.cwd(),
+	sourceDir = resolveDistributableSkillSourceDir(),
+	confirmReplace,
+	isInteractive = isTerminalInteractive(),
+}: SyncSkillOptions = {}) => {
+	const destinationDir = path.join(cwd, DISTRIBUTABLE_SKILL_DESTINATION)
+	const sourceEntry = path.join(sourceDir, DISTRIBUTABLE_SKILL_ENTRY)
+
+	if (!fs.existsSync(sourceEntry)) {
+		throw new Error(`Canonical ${DISTRIBUTABLE_SKILL_NAME} skill source is missing: ${sourceEntry}`)
+	}
+
+	const destinationExists = fs.existsSync(destinationDir)
+	if (destinationExists && !replace) {
+		const message = `Replace ${destinationDir} with the packaged ${DISTRIBUTABLE_SKILL_NAME} skill?`
+		const shouldReplace =
+			confirmReplace !== undefined
+				? await confirmReplace(message)
+				: isInteractive
+					? await (await import('../utils/menus.js')).askYesNo(message, false)
+					: undefined
+
+		if (shouldReplace === undefined) {
+			throw new CliUsageError(
+				`${destinationDir} already exists. Rerun with --replace to replace it without interactive confirmation.`
+			)
+		}
+
+		if (!shouldReplace) {
+			console.log(`Skill sync cancelled. Destination left unchanged: ${destinationDir}`)
+			return
+		}
+	}
+
+	fs.mkdirSync(path.dirname(destinationDir), { recursive: true })
+	fs.rmSync(destinationDir, { recursive: true, force: true })
+	fs.cpSync(sourceDir, destinationDir, { recursive: true })
+
+	console.log(
+		`${destinationExists ? 'Replaced' : 'Created'} ${DISTRIBUTABLE_SKILL_NAME} skill.\nSource: ${sourceDir}\nDestination: ${destinationDir}`
+	)
+}
 
 const getAbsoluteDbPath = () => {
 	dotenv.config({ path: '.env.local' })
