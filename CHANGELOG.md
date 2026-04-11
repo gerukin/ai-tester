@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-04-11
+
 ### Added
 
 - A repository-native offline automated test suite covering runtime flows, sync flows, markdown parsing, config validation, stats, OpenRouter helpers, and app bootstrap.
@@ -177,7 +179,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - 🎉 Version `0.9.0` is out... with all the base features. It isn't quite yet stable or tested enough to be relied upon.
 
-[Unreleased]: https://github.com/gerukin/ai-tester/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/gerukin/ai-tester/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/gerukin/ai-tester/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/gerukin/ai-tester/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/gerukin/ai-tester/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/gerukin/ai-tester/compare/v0.12.1...v0.13.0
