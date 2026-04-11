@@ -18,6 +18,8 @@ ai-tester list --models --tags --prompts --currencies
 
 Avoid direct database access for routine work. Do not open SQLite, run SQL, inspect Drizzle tables, or read DB rows just to find available work or stats. Use direct DB inspection only when the user explicitly asks for it, the task is to debug ai-tester internals, or a CLI error points to a database corruption/migration issue that the CLI cannot explain.
 
+Run DB-accessing `ai-tester` commands sequentially because the local database can lock. Do not parallelize `sync`, `migrate`, `run-tests`, `run-evals`, stats queries, or dry runs that include DB checks/counts. File-backed listing commands such as `ai-tester list --models --tags --prompts --currencies` are safe to run separately.
+
 Keep file inspection narrow. Read package scripts only to choose the package-manager command. Read `.env`, `.env.local`, or `AI_TESTER_CONFIG_PATH` only if a CLI command cannot locate its config, or if the user asks you to change configuration files. Read model/prompt/test YAML or markdown only when editing those files or when CLI output names a specific missing/invalid file.
 
 When the user names models, tags, attempts, temperatures, evaluator counts, system prompts, currencies, or other scope details, pass them through runtime overrides or ad hoc stats JSON. Do not fall back to predefined config just because an override takes a little more JSON.
