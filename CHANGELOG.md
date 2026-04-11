@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Analysis query descriptions must now be unique because they can be selected exactly from the CLI.
 - Frontmatter parsing now trims leading whitespace before the actual prompt or test body, matching the installed local corpus while avoiding off-by-one extraction behavior.
 - Test parsing now treats only the last standalone `---` line as the start of evaluation instructions; earlier `---` usages remain part of the test content.
+- Structured-object test sessions and evaluator judgments now persist reasoning traces when providers return them.
 
 ## [0.15.0] - 2026-04-09
 

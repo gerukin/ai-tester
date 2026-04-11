@@ -6,7 +6,7 @@ import { generateText, Output } from 'ai';
 import z from 'zod';
 import { schema } from '../database/schema.js';
 import { getSectionsFromMarkdownContent, sectionsToAiMessages } from '../utils/markdown.js';
-import { getRequiredLanguageModelTokenUsage } from '../utils/ai-sdk.js';
+import { getRequiredLanguageModelTokenUsage, getTrimmedReasoningText } from '../utils/ai-sdk.js';
 const evalSchema = z.object({
     // Note: `.nullable()` is not supported by some providers (like Vertex AI) as it generates an unsupported `anyOf` schema
     feedback: z
@@ -212,12 +212,14 @@ export const runAllEvaluationsWithDeps = async ({ db, testsConfig, registry, con
             }
             // add the response to the DB as a session
             const trimmedFeedback = response.output.feedback?.trim();
+            const reasoning = getTrimmedReasoningText(response.reasoningText);
             await db.insert(sessionEvaluations).values({
                 sessionId: evaluation.sessionId,
                 evaluationPromptVersionId: evaluation.evalPromptVersionId,
                 testEvaluationInstructionsVersionId: evaluation.evalInstructionsId,
                 modelVersionId: evaluation.modelVersionId,
                 temperature,
+                reasoning,
                 pass: response.output.pass ? 1 : 0,
                 feedback: trimmedFeedback ? trimmedFeedback : null,
                 completionTokens,

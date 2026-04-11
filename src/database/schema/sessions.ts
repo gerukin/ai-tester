@@ -130,8 +130,8 @@ export const sessionEvaluations = sqliteTable(
 		/** Temperature used */
 		temperature: real('temperature').notNull(),
 
-		// Note: reasoning is not available when generating structured objects, even for reasoning models,
-		// and cannot be stored here as a result.
+		/** The thoughts/reasoning outputted by the LLM, if available */
+		reasoning: text('reasoning'),
 
 		/** Whether the evaluation was passed or not */
 		pass: integer('pass').notNull(),

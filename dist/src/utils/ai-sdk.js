@@ -1,5 +1,9 @@
 const isJsonObject = (value) => value !== undefined && value !== null && typeof value === 'object' && !Array.isArray(value);
 const getOptionalNumber = (value) => (typeof value === 'number' ? value : undefined);
+export const getTrimmedReasoningText = (reasoningText) => {
+    const reasoning = reasoningText?.trim();
+    return reasoning ? reasoning : undefined;
+};
 const isOpenAICompatibleUsageShape = (raw) => isJsonObject(raw) &&
     ['prompt_tokens', 'completion_tokens', 'prompt_tokens_details', 'completion_tokens_details'].some(key => Object.hasOwn(raw, key));
 const isAnthropicUsageShape = (raw) => isJsonObject(raw) &&

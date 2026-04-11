@@ -8,7 +8,7 @@ import z from 'zod'
 
 import { schema } from '../database/schema.js'
 import { getSectionsFromMarkdownContent, sectionsToAiMessages } from '../utils/markdown.js'
-import { getRequiredLanguageModelTokenUsage } from '../utils/ai-sdk.js'
+import { getRequiredLanguageModelTokenUsage, getTrimmedReasoningText } from '../utils/ai-sdk.js'
 import type { FileBackedModelRegistry } from '../config/model-registry.js'
 
 const evalSchema = z.object({
@@ -408,12 +408,14 @@ export const runAllEvaluationsWithDeps = async ({
 
 			// add the response to the DB as a session
 			const trimmedFeedback = response.output.feedback?.trim()
+			const reasoning = getTrimmedReasoningText(response.reasoningText)
 			await db.insert(sessionEvaluations).values({
 				sessionId: evaluation.sessionId,
 				evaluationPromptVersionId: evaluation.evalPromptVersionId,
 				testEvaluationInstructionsVersionId: evaluation.evalInstructionsId,
 				modelVersionId: evaluation.modelVersionId,
 				temperature,
+				reasoning,
 				pass: response.output.pass ? 1 : 0,
 				feedback: trimmedFeedback ? trimmedFeedback : null,
 				completionTokens,

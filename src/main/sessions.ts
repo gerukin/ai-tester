@@ -15,7 +15,7 @@ import type { z } from 'zod'
 import { schema } from '../database/schema.js'
 import { getSectionsFromMarkdownContent, sectionsToAiMessages, getReferencedFiles } from '../utils/markdown.js'
 import { ToolDefinition } from './tool-definition.js'
-import { getRequiredLanguageModelTokenUsage } from '../utils/ai-sdk.js'
+import { getRequiredLanguageModelTokenUsage, getTrimmedReasoningText } from '../utils/ai-sdk.js'
 import type { FileBackedModelRegistry } from '../config/model-registry.js'
 
 /**
@@ -304,7 +304,6 @@ export const runAllTestsWithDeps = async ({
 					break
 				}
 				answer = JSON.stringify(response.output)
-				reasoning = undefined
 			} else {
 				// Otherwise, use generateText
 
@@ -346,9 +345,9 @@ export const runAllTestsWithDeps = async ({
 				} else {
 					answer = response.text.trim()
 				}
-
-				reasoning = response.reasoningText?.trim()
 			}
+
+			reasoning = getTrimmedReasoningText(response.reasoningText)
 
 			const endTime = Date.now()
 			let cachedPromptTokensRead: number | undefined,

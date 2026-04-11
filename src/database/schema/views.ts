@@ -22,6 +22,7 @@ export const evaluatedSessionsView = sqliteView('evaluated_sessions_view').as(qb
 			evaluator_model: evalModelAlias.providerModelCode,
 			pass: sessionEvaluations.pass,
 			feedback: sessionEvaluations.feedback,
+			eval_reasoning: sessionEvaluations.reasoning,
 
 			// temperature fields
 			candidate_temp: sessions.temperature,

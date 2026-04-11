@@ -151,6 +151,7 @@ test('evaluations replace placeholders and persist trimmed feedback and pass sta
 						pass: false,
 						feedback: '  Expected 4, but the candidate answered 5.  ',
 					},
+					reasoningText: '  compared the candidate answer against the expected value  ',
 					usage: { inputTokens: 9, outputTokens: 4 },
 				}
 			},
@@ -168,9 +169,17 @@ test('evaluations replace placeholders and persist trimmed feedback and pass sta
 	)
 	assert.strictEqual(evaluations[0]?.pass, 0)
 	assert.strictEqual(evaluations[0]?.feedback, 'Expected 4, but the candidate answered 5.')
+	assert.strictEqual(evaluations[0]?.reasoning, 'compared the candidate answer against the expected value')
 	assert.strictEqual(evaluations[0]?.promptTokens, 9)
 	assert.strictEqual(evaluations[0]?.completionTokens, 4)
 	assert.ok((evaluations[0]?.timeTaken ?? -1) >= 0)
+
+	const evaluatedSessions = await harness.client.execute('select eval_reasoning from evaluated_sessions_view')
+	assert.strictEqual(evaluatedSessions.rows.length, 1)
+	assert.strictEqual(
+		evaluatedSessions.rows[0]?.['eval_reasoning'],
+		'compared the candidate answer against the expected value'
+	)
 
 	const serializedMessages = JSON.stringify(calls[0]?.messages)
 	assert.match(serializedMessages, /The answer must be exactly 4\./)

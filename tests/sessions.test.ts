@@ -197,7 +197,7 @@ test('ollama tool-call sessions pass tool schemas and persist serialized tool ca
 	assert.deepStrictEqual(Object.keys(calls[0]?.tools as Record<string, unknown>), ['cityWeather'])
 })
 
-test('ollama structured-output sessions persist serialized objects without reasoning text', async t => {
+test('ollama structured-output sessions persist serialized objects with reasoning text', async t => {
 	const harness = await createTestDatabase()
 	t.after(async () => {
 		await harness.cleanup()
@@ -243,6 +243,7 @@ test('ollama structured-output sessions persist serialized objects without reaso
 				calls.push(args as Record<string, unknown>)
 				return {
 					output: { invoiceId: 'INV-42' },
+					reasoningText: '  extracted the invoice id from the document  ',
 					usage: { inputTokens: 8, outputTokens: 3 },
 				}
 			},
@@ -252,7 +253,7 @@ test('ollama structured-output sessions persist serialized objects without reaso
 	const sessions = await harness.db.select().from(schema.sessions)
 	assert.strictEqual(sessions.length, 1)
 	assert.strictEqual(sessions[0]?.answer, JSON.stringify({ invoiceId: 'INV-42' }))
-	assert.strictEqual(sessions[0]?.reasoning, null)
+	assert.strictEqual(sessions[0]?.reasoning, 'extracted the invoice id from the document')
 	assert.ok(calls[0]?.output)
 })
 

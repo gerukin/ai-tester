@@ -5,6 +5,11 @@ const isJsonObject = (value: JSONValue | undefined): value is Record<string, JSO
 
 const getOptionalNumber = (value: JSONValue | undefined) => (typeof value === 'number' ? value : undefined)
 
+export const getTrimmedReasoningText = (reasoningText: string | undefined) => {
+	const reasoning = reasoningText?.trim()
+	return reasoning ? reasoning : undefined
+}
+
 const isOpenAICompatibleUsageShape = (raw: JSONValue | undefined): raw is Record<string, JSONValue> =>
 	isJsonObject(raw) &&
 	['prompt_tokens', 'completion_tokens', 'prompt_tokens_details', 'completion_tokens_details'].some(key =>
