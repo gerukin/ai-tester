@@ -43,11 +43,41 @@ test('cli dispatch routes commands and forwards dry-run and query arguments', as
 	assert.strictEqual(runTests.result.exitCode, 0)
 	assert.deepStrictEqual(runTests.result.calls, [{ name: 'run-tests', dryRun: true }])
 
+	const runTestsWithOverrides = expectModuleSuccess(
+		env.runModule('cli:dispatch', {
+			argv: ['run-tests', '--dry-run', '--include-counts', '--config-overrides', '{"attempts":2}'],
+		})
+	) as {
+		result: {
+			exitCode: number
+			calls: Array<{ name: string; dryRun?: boolean; includeCounts?: boolean; configOverridesJson?: string }>
+		}
+	}
+	assert.strictEqual(runTestsWithOverrides.result.exitCode, 0)
+	assert.deepStrictEqual(runTestsWithOverrides.result.calls, [
+		{ name: 'run-tests', dryRun: true, includeCounts: true, configOverridesJson: '{"attempts":2}' },
+	])
+
 	const runEvals = expectModuleSuccess(env.runModule('cli:dispatch', { argv: ['run-evals'] })) as {
 		result: { exitCode: number; calls: Array<{ name: string; dryRun?: boolean }> }
 	}
 	assert.strictEqual(runEvals.result.exitCode, 0)
 	assert.deepStrictEqual(runEvals.result.calls, [{ name: 'run-evals', dryRun: false }])
+
+	const runEvalsWithOverrides = expectModuleSuccess(
+		env.runModule('cli:dispatch', {
+			argv: ['run-evals', '--dry-run', '--include-counts', '--config-overrides-file', 'eval-overrides.json'],
+		})
+	) as {
+		result: {
+			exitCode: number
+			calls: Array<{ name: string; dryRun?: boolean; includeCounts?: boolean; configOverridesFile?: string }>
+		}
+	}
+	assert.strictEqual(runEvalsWithOverrides.result.exitCode, 0)
+	assert.deepStrictEqual(runEvalsWithOverrides.result.calls, [
+		{ name: 'run-evals', dryRun: true, includeCounts: true, configOverridesFile: 'eval-overrides.json' },
+	])
 
 	const sync = expectModuleSuccess(env.runModule('cli:dispatch', { argv: ['sync'] })) as {
 		result: { exitCode: number; calls: Array<{ name: string }> }
@@ -68,6 +98,28 @@ test('cli dispatch routes commands and forwards dry-run and query arguments', as
 	}
 	assert.strictEqual(statsQuery.result.exitCode, 0)
 	assert.deepStrictEqual(statsQuery.result.calls, [{ name: 'stats:query', description: 'Named query' }])
+
+	const statsQueryJson = expectModuleSuccess(
+		env.runModule('cli:dispatch', {
+			argv: ['stats', '--query-json', '{"description":"Ad hoc","currency":"USD"}', '--dry-run'],
+		})
+	) as {
+		result: { exitCode: number; calls: Array<{ name: string; json?: string; dryRun?: boolean }> }
+	}
+	assert.strictEqual(statsQueryJson.result.exitCode, 0)
+	assert.deepStrictEqual(statsQueryJson.result.calls, [
+		{ name: 'stats:query-json', json: '{"description":"Ad hoc","currency":"USD"}', dryRun: true },
+	])
+
+	const statsQueryFile = expectModuleSuccess(
+		env.runModule('cli:dispatch', { argv: ['stats', '--query-file', 'stats-query.json'] })
+	) as {
+		result: { exitCode: number; calls: Array<{ name: string; filePath?: string }> }
+	}
+	assert.strictEqual(statsQueryFile.result.exitCode, 0)
+	assert.deepStrictEqual(statsQueryFile.result.calls, [
+		{ name: 'stats:query-file', filePath: 'stats-query.json' },
+	])
 })
 
 test('cli help works at the root and subcommand level', async t => {
@@ -148,7 +200,7 @@ test('cli returns usage errors for invalid commands and invalid stats options', 
 		logs: string[][]
 	}
 	assert.strictEqual(missingStatsMode.result.exitCode, 2)
-	assert.match(String(missingStatsMode.logs[0]?.[0]), /stats requires exactly one of --list or --query/)
+	assert.match(String(missingStatsMode.logs[0]?.[0]), /stats requires exactly one of --list/)
 
 	const conflictingStatsMode = expectModuleSuccess(
 		env.runModule('cli:run', { argv: ['stats', '--list', '--query', 'Named query'] })
@@ -157,7 +209,7 @@ test('cli returns usage errors for invalid commands and invalid stats options', 
 		logs: string[][]
 	}
 	assert.strictEqual(conflictingStatsMode.result.exitCode, 2)
-	assert.match(String(conflictingStatsMode.logs[0]?.[0]), /stats requires exactly one of --list or --query/)
+	assert.match(String(conflictingStatsMode.logs[0]?.[0]), /stats requires exactly one of --list/)
 
 	const unknownStatsQuery = expectModuleSuccess(
 		env.runModule('cli:run', { argv: ['stats', '--query', 'Missing query'] })
@@ -206,7 +258,56 @@ test('cli returns usage errors for invalid commands and invalid stats options', 
 		logs: string[][]
 	}
 	assert.strictEqual(repeatedStatsQuery.result.exitCode, 2)
-	assert.match(String(repeatedStatsQuery.logs[0]?.[0]), /stats requires exactly one of --list or --query/)
+	assert.match(String(repeatedStatsQuery.logs[0]?.[0]), /stats requires exactly one of --list/)
+
+	const conflictingRunOverrides = expectModuleSuccess(
+		env.runModule('cli:run', {
+			argv: ['run-tests', '--config-overrides', '{}', '--config-overrides-file', 'overrides.json'],
+		})
+	) as {
+		result: { exitCode: number }
+		logs: string[][]
+	}
+	assert.strictEqual(conflictingRunOverrides.result.exitCode, 2)
+	assert.match(String(conflictingRunOverrides.logs[0]?.[0]), /run-tests accepts only one runtime override source/)
+
+	const invalidRunOverrideJson = expectModuleSuccess(
+		env.runModule('cli:run', { argv: ['run-tests', '--config-overrides', '{'] })
+	) as {
+		result: { exitCode: number }
+		logs: string[][]
+	}
+	assert.strictEqual(invalidRunOverrideJson.result.exitCode, 2)
+	assert.match(String(invalidRunOverrideJson.logs[0]?.[0]), /run-tests --config-overrides must be valid JSON/)
+
+	const includeCountsWithoutDryRun = expectModuleSuccess(
+		env.runModule('cli:run', { argv: ['run-tests', '--include-counts'] })
+	) as {
+		result: { exitCode: number }
+		logs: string[][]
+	}
+	assert.strictEqual(includeCountsWithoutDryRun.result.exitCode, 2)
+	assert.match(String(includeCountsWithoutDryRun.logs[0]?.[0]), /run-tests --include-counts can only be used with --dry-run/)
+
+	const conflictingStatsQueryModes = expectModuleSuccess(
+		env.runModule('cli:run', {
+			argv: ['stats', '--query', 'Existing query', '--query-json', '{"currency":"USD"}'],
+		})
+	) as {
+		result: { exitCode: number }
+		logs: string[][]
+	}
+	assert.strictEqual(conflictingStatsQueryModes.result.exitCode, 2)
+	assert.match(String(conflictingStatsQueryModes.logs[0]?.[0]), /stats requires exactly one of --list/)
+
+	const invalidStatsQueryJson = expectModuleSuccess(
+		env.runModule('cli:run', { argv: ['stats', '--query-json', '{'] })
+	) as {
+		result: { exitCode: number }
+		logs: string[][]
+	}
+	assert.strictEqual(invalidStatsQueryJson.result.exitCode, 2)
+	assert.match(String(invalidStatsQueryJson.logs[0]?.[0]), /stats --query-json must be valid JSON/)
 
 	const unknownStatsQueryWithBrokenCurrency = expectModuleSuccess(
 		env.runModule('cli:run', { argv: ['stats', '--query', 'Missing query'] })
@@ -400,6 +501,215 @@ test('cli stats --query runs the selected analysis query by description', async 
 
 	assert.strictEqual(emptyDescription.result.exitCode, 0)
 	assert.deepStrictEqual(emptyDescription.logs, [['Checking for stats...']])
+
+	const dryRunNamedQuery = expectModuleSuccess(
+		env.runModule('cli:run', { argv: ['stats', '--query', 'Empty query', '--dry-run'] })
+	) as {
+		result: { exitCode: number }
+		logs: string[][]
+	}
+
+	assert.strictEqual(dryRunNamedQuery.result.exitCode, 0)
+	assert.strictEqual(dryRunNamedQuery.logs[0]?.[0], 'Dry run: would run stats query.')
+	assert.match(String(dryRunNamedQuery.logs[1]?.[0]), /Dry run: resolved stats query:/)
+})
+
+test('cli stats can run an ad hoc query from JSON without configured analysisQueries', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	await env.write(
+		'ai-tester.config.yaml',
+		[
+			'candidates: []',
+			'candidatesTemperature: 0.3',
+			'attempts: 1',
+			'requiredTags1: []',
+			'requiredTags2: []',
+			'prohibitedTags: []',
+			'evaluators: []',
+			'evaluatorsTemperature: 0.4',
+			'evaluationsPerEvaluator: 1',
+		].join('\n')
+	)
+	await env.write(
+		'data/currencies/USD.yaml',
+		['code: USD', 'rates:', '  - rateInUSD: 1', '    validFrom: 2025-01-01'].join('\n')
+	)
+
+	const output = expectModuleSuccess(
+		env.runModule('cli:run', {
+			argv: [
+				'stats',
+				'--query-json',
+				JSON.stringify({
+					currency: 'usd',
+					candidates: [],
+				}),
+			],
+		})
+	) as {
+		result: { exitCode: number }
+		logs: string[][]
+	}
+
+	assert.strictEqual(output.result.exitCode, 0)
+	assert.deepStrictEqual(output.logs, [
+		['Checking for stats...'],
+		['⚠️ Query "Ad hoc query" has no active candidate models.'],
+	])
+})
+
+test('cli stats --dry-run validates and prints ad hoc query without running stats', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	await env.write(
+		'data/currencies/USD.yaml',
+		['code: USD', 'rates:', '  - rateInUSD: 1', '    validFrom: 2025-01-01'].join('\n')
+	)
+	await env.write(
+		'ad-hoc-query.json',
+		JSON.stringify({
+			description: 'Dry ad hoc',
+			currency: 'USD',
+			requiredTags1: ['smoke'],
+			systemPrompts: ['helpful'],
+		})
+	)
+
+	const output = expectModuleSuccess(
+		env.runModule('cli:run', {
+			argv: ['stats', '--dry-run', '--query-file', `${env.rootDir}/ad-hoc-query.json`],
+		})
+	) as {
+		result: { exitCode: number }
+		logs: string[][]
+	}
+
+	assert.strictEqual(output.result.exitCode, 0)
+	assert.strictEqual(output.logs[0]?.[0], 'Dry run: would run stats query.')
+	assert.match(String(output.logs[1]?.[0]), /Dry run: resolved stats query:/)
+	const resolvedQuery = JSON.parse(String(output.logs[1]?.[0]).split('\n').slice(1).join('\n')) as {
+		description: string
+		currency: string
+		requiredTags1: string[]
+		systemPrompts: string[]
+	}
+	assert.strictEqual(resolvedQuery.description, 'Dry ad hoc')
+	assert.strictEqual(resolvedQuery.currency, 'USD')
+	assert.deepStrictEqual(resolvedQuery.requiredTags1, ['smoke'])
+	assert.deepStrictEqual(resolvedQuery.systemPrompts, ['helpful'])
+})
+
+test('cli stats --dry-run suppresses unavailable model warnings for ad hoc queries', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	await env.write(
+		'data/currencies/USD.yaml',
+		['code: USD', 'rates:', '  - rateInUSD: 1', '    validFrom: 2025-01-01'].join('\n')
+	)
+
+	const output = expectModuleSuccess(
+		env.runModule('cli:run', {
+			argv: [
+				'stats',
+				'--dry-run',
+				'--query-json',
+				JSON.stringify({
+					currency: 'USD',
+					candidates: [{ provider: 'missing', model: 'missing' }],
+				}),
+			],
+		})
+	) as {
+		result: { exitCode: number }
+		logs: string[][]
+	}
+
+	assert.strictEqual(output.result.exitCode, 0)
+	assert.strictEqual(output.logs[0]?.[0], 'Dry run: would run stats query.')
+	assert.match(String(output.logs[1]?.[0]), /Dry run: resolved stats query:/)
+})
+
+test('cli stats ad hoc queries do not validate unrelated configured query currencies', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	await env.write(
+		'ai-tester.config.yaml',
+		[
+			'candidates: []',
+			'candidatesTemperature: 0.3',
+			'attempts: 1',
+			'requiredTags1: []',
+			'requiredTags2: []',
+			'prohibitedTags: []',
+			'evaluators: []',
+			'evaluatorsTemperature: 0.4',
+			'evaluationsPerEvaluator: 1',
+			'analysisQueries:',
+			'  - description: Broken configured query',
+			'    currency: EUR',
+		].join('\n')
+	)
+	await env.write(
+		'data/currencies/USD.yaml',
+		['code: USD', 'rates:', '  - rateInUSD: 1', '    validFrom: 2025-01-01'].join('\n')
+	)
+
+	const output = expectModuleSuccess(
+		env.runModule('cli:run', {
+			argv: ['stats', '--query-json', JSON.stringify({ currency: 'USD', candidates: [] })],
+		})
+	) as {
+		result: { exitCode: number }
+		logs: string[][]
+	}
+
+	assert.strictEqual(output.result.exitCode, 0)
+	assert.deepStrictEqual(output.logs, [
+		['Checking for stats...'],
+		['⚠️ Query "Ad hoc query" has no active candidate models.'],
+	])
+})
+
+test('cli stats ad hoc query validates runtime query currencies', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	const output = expectModuleSuccess(
+		env.runModule('cli:run', {
+			argv: [
+				'stats',
+				'--query-json',
+				JSON.stringify({
+					description: 'Missing runtime currency',
+					currency: 'EUR',
+				}),
+			],
+		})
+	) as {
+		result: { exitCode: number }
+		logs: string[][]
+	}
+
+	assert.strictEqual(output.result.exitCode, 1)
+	assert.match(
+		String(output.logs[0]?.[0]),
+		/Currency registry is missing YAML files for referenced currencies: EUR \(analysis query "Missing runtime currency"\)/
+	)
 })
 
 test('cli run-tests --dry-run validates and does not mutate the database', async t => {
@@ -417,13 +727,161 @@ test('cli run-tests --dry-run validates and does not mutate the database', async
 	}
 
 	assert.strictEqual(output.result.exitCode, 0)
-	assert.deepStrictEqual(output.logs, [
+	assert.deepStrictEqual(output.logs.slice(0, 2), [
 		['Dry run: would sync currencies, providers, structured objects, tools, prompts, and tests.'],
 		['Dry run: would then run missing tests.'],
 	])
+	assert.match(String(output.logs[2]?.[0]), /Dry run: resolved test run configuration:/)
+	const resolvedConfig = JSON.parse(String(output.logs[2]?.[0]).split('\n').slice(1).join('\n')) as {
+		attempts: number
+	}
+	assert.strictEqual(resolvedConfig.attempts, 1)
 
 	const after = await env.db.select().from(schema.providers)
 	assert.deepStrictEqual(after, [])
+})
+
+test('cli run-tests --dry-run applies runtime overrides and does not mutate the database', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	const output = expectModuleSuccess(
+		env.runModule('cli:run', {
+			argv: [
+				'run-tests',
+				'--dry-run',
+				'--config-overrides',
+				JSON.stringify({
+					attempts: 2,
+					candidatesTemperature: 0.7,
+					requiredTags1: ['smoke'],
+					prohibitedTags: ['skip'],
+				}),
+			],
+		})
+	) as {
+		result: { exitCode: number }
+		logs: string[][]
+	}
+
+	assert.strictEqual(output.result.exitCode, 0)
+	const resolvedConfig = JSON.parse(String(output.logs[2]?.[0]).split('\n').slice(1).join('\n')) as {
+		attempts: number
+		candidatesTemperature: number
+		requiredTags1: string[]
+		prohibitedTags: string[]
+	}
+	assert.strictEqual(resolvedConfig.attempts, 2)
+	assert.strictEqual(resolvedConfig.candidatesTemperature, 0.7)
+	assert.deepStrictEqual(resolvedConfig.requiredTags1, ['smoke'])
+	assert.deepStrictEqual(resolvedConfig.prohibitedTags, ['skip'])
+
+	const after = await env.db.select().from(schema.providers)
+	assert.deepStrictEqual(after, [])
+})
+
+test('cli run-tests --dry-run --include-counts syncs a temporary database copy only', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	const output = expectModuleSuccess(
+		env.runModule('cli:run', { argv: ['run-tests', '--dry-run', '--include-counts'] })
+	) as {
+		result: { exitCode: number }
+		logs: string[][]
+	}
+
+	assert.strictEqual(output.result.exitCode, 0)
+	assert.deepStrictEqual(output.logs.slice(0, 3), [
+		['Dry run: would sync currencies, providers, structured objects, tools, prompts, and tests.'],
+		['Dry run: would then run missing tests.'],
+		['Dry run: 0 missing test run(s) after syncing a temporary database copy.'],
+	])
+	assert.match(String(output.logs[3]?.[0]), /Dry run: resolved test run configuration:/)
+
+	const after = await env.db.select().from(schema.providers)
+	assert.deepStrictEqual(after, [])
+})
+
+test('cli run-tests runtime overrides filter unavailable model references', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	await env.write('data/providers/openai.yaml', ['code: openai', 'name: OpenAI', 'type: openai'].join('\n'))
+	await env.write(
+		'data/models/gpt-4o-mini.yaml',
+		[
+			'code: gpt-4o-mini',
+			'provider: openai',
+			'providerModelCode: gpt-4o-mini',
+			'costs:',
+			'  - costPerCall: 0',
+			'    costPerPromptToken: 0',
+			'    costPerCompletionToken: 0',
+			'    costPerHour: 0',
+			'    currency: USD',
+			'    validFrom: 2025-01-01',
+		].join('\n')
+	)
+	await env.write(
+		'data/currencies/USD.yaml',
+		['code: USD', 'rates:', '  - rateInUSD: 1', '    validFrom: 2025-01-01'].join('\n')
+	)
+
+	const output = expectModuleSuccess(
+		env.runModule('cli:run', {
+			argv: [
+				'run-tests',
+				'--dry-run',
+				'--config-overrides',
+				JSON.stringify({
+					candidates: [
+						{ provider: 'openai', model: 'gpt-4o-mini' },
+						{ provider: 'openai', model: 'missing-model' },
+					],
+				}),
+			],
+		})
+	) as {
+		result: { exitCode: number }
+		logs: string[][]
+	}
+
+	assert.strictEqual(output.result.exitCode, 0)
+	assert.deepStrictEqual(output.logs.slice(0, 2), [
+		['Dry run: would sync currencies, providers, structured objects, tools, prompts, and tests.'],
+		['Dry run: would then run missing tests.'],
+	])
+	const resolvedLog = output.logs.find(entry =>
+		String(entry[0]).startsWith('Dry run: resolved test run configuration:')
+	)
+	const resolvedConfig = JSON.parse(String(resolvedLog?.[0]).split('\n').slice(1).join('\n')) as {
+		candidates: Array<{ provider: string; model: string }>
+	}
+	assert.deepStrictEqual(resolvedConfig.candidates, [{ provider: 'openai', model: 'gpt-4o-mini' }])
+})
+
+test('run-tests confirmation cancellation happens before runtime config parsing', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	await env.remove('ai-tester.config.yaml')
+
+	const output = expectModuleSuccess(env.runModule('actions:runTestsWithSyncCancelled')) as {
+		result: { confirmCalls: number }
+		logs: string[][]
+	}
+
+	assert.strictEqual(output.result.confirmCalls, 1)
+	assert.deepStrictEqual(output.logs, [])
 })
 
 test('cli run-tests --dry-run still fails when config validation fails', async t => {
@@ -492,10 +950,74 @@ test('cli run-evals --dry-run validates and does not mutate the database', async
 	}
 
 	assert.strictEqual(output.result.exitCode, 0)
-	assert.deepStrictEqual(output.logs, [
+	assert.deepStrictEqual(output.logs.slice(0, 2), [
 		['Dry run: would sync currencies, providers, structured objects, tools, prompts, and tests.'],
 		['Dry run: would then run missing evaluations.'],
 	])
+	assert.match(String(output.logs[2]?.[0]), /Dry run: resolved evaluation run configuration:/)
+})
+
+test('cli run-evals --dry-run applies file runtime overrides and does not mutate the database', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	await env.write(
+		'eval-overrides.json',
+		JSON.stringify({
+			evaluatorsTemperature: 0.8,
+			evaluationsPerEvaluator: 2,
+			requiredTags2: ['reasoning'],
+		})
+	)
+
+	const output = expectModuleSuccess(
+		env.runModule('cli:run', {
+			argv: ['run-evals', '--dry-run', '--config-overrides-file', `${env.rootDir}/eval-overrides.json`],
+		})
+	) as {
+		result: { exitCode: number }
+		logs: string[][]
+	}
+
+	assert.strictEqual(output.result.exitCode, 0)
+	const resolvedConfig = JSON.parse(String(output.logs[2]?.[0]).split('\n').slice(1).join('\n')) as {
+		evaluatorsTemperature: number
+		evaluationsPerEvaluator: number
+		requiredTags2: string[]
+	}
+	assert.strictEqual(resolvedConfig.evaluatorsTemperature, 0.8)
+	assert.strictEqual(resolvedConfig.evaluationsPerEvaluator, 2)
+	assert.deepStrictEqual(resolvedConfig.requiredTags2, ['reasoning'])
+
+	const after = await env.db.select().from(schema.providers)
+	assert.deepStrictEqual(after, [])
+})
+
+test('cli run-evals --dry-run --include-counts syncs a temporary database copy only', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	const output = expectModuleSuccess(
+		env.runModule('cli:run', { argv: ['run-evals', '--dry-run', '--include-counts'] })
+	) as {
+		result: { exitCode: number }
+		logs: string[][]
+	}
+
+	assert.strictEqual(output.result.exitCode, 0)
+	assert.deepStrictEqual(output.logs.slice(0, 3), [
+		['Dry run: would sync currencies, providers, structured objects, tools, prompts, and tests.'],
+		['Dry run: would then run missing evaluations.'],
+		['Dry run: 0 missing evaluation run(s) after syncing a temporary database copy.'],
+	])
+	assert.match(String(output.logs[3]?.[0]), /Dry run: resolved evaluation run configuration:/)
+
+	const after = await env.db.select().from(schema.providers)
+	assert.deepStrictEqual(after, [])
 })
 
 test('cli run-evals --dry-run still fails when config validation fails', async t => {

@@ -127,7 +127,14 @@ const loadConfiguredAnalysisQueryCurrencies = () => {
 }
 
 export const validateCurrencyRegistryReferences = (
-	registry: FileBackedCurrencyRegistry = getFileBackedCurrencyRegistry()
+	registry: FileBackedCurrencyRegistry = getFileBackedCurrencyRegistry(),
+	{
+		analysisQueries = [],
+		includeConfiguredAnalysisQueries = true,
+	}: {
+		analysisQueries?: Array<{ description?: string; currency: string }>
+		includeConfiguredAnalysisQueries?: boolean
+	} = {}
 ) => {
 	if (!isCurrencyRegistryConfigured()) return
 
@@ -144,7 +151,8 @@ export const validateCurrencyRegistryReferences = (
 		}
 	}
 
-	for (const query of loadConfiguredAnalysisQueryCurrencies()) {
+	const configuredAnalysisQueries = includeConfiguredAnalysisQueries ? loadConfiguredAnalysisQueryCurrencies() : []
+	for (const query of [...configuredAnalysisQueries, ...analysisQueries]) {
 		if (!registry.currenciesByCode.has(query.currency)) {
 			addMissingSource(query.currency, `analysis query "${query.description}"`)
 		}

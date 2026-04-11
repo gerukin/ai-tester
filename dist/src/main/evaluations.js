@@ -17,8 +17,9 @@ const evalSchema = z.object({
         .boolean()
         .describe("A boolean value indicating whether the AI candidate's response is as expected in the evaluation instructions."),
 });
-const getMissingEvaluations = async (db, testsConfig) => {
-    console.log('Checking for evaluations to run...');
+const getMissingEvaluations = async (db, testsConfig, { log = true } = {}) => {
+    if (log)
+        console.log('Checking for evaluations to run...');
     if (testsConfig.candidates.length === 0) {
         console.log('⚠️ No active candidate models are configured.');
         return [];
@@ -256,7 +257,15 @@ const createDefaultEvaluationRunnerDeps = async () => {
         state,
     };
 };
-export const runAllEvaluations = async ({ confirmRun } = {}) => runAllEvaluationsWithDeps({
+export const countMissingEvaluations = async ({ testsConfig, } = {}) => {
+    const [{ resolveTestsConfig }, { db }] = await Promise.all([import('../config/index.js'), import('../database/db.js')]);
+    const resolvedTestsConfig = testsConfig ?? resolveTestsConfig();
+    const missingEvaluations = await getMissingEvaluations(db, resolvedTestsConfig, { log: false });
+    return missingEvaluations.reduce((acc, evaluation) => acc + (resolvedTestsConfig.evaluationsPerEvaluator - evaluation.evaluationsCount), 0);
+};
+export const runAllEvaluations = async ({ confirmRun, testsConfig, registry } = {}) => runAllEvaluationsWithDeps({
     ...(await createDefaultEvaluationRunnerDeps()),
     ...(confirmRun ? { confirmRun } : {}),
+    ...(testsConfig ? { testsConfig } : {}),
+    ...(registry ? { registry } : {}),
 });

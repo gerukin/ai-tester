@@ -223,12 +223,14 @@ const syncRegistryToDb = async (registry) => {
         await setActiveByIds(tx, modelVersions, Array.from(activeModelVersionIds));
     });
 };
-export async function updateProvidersInDb() {
+export async function updateProvidersInDb({ validateConfiguredAnalysisQueryCurrencies = true, } = {}) {
     console.log('Updating providers and models in the database...');
     try {
         clearFileBackedModelRegistryCache();
         if (isCurrencyRegistryConfigured()) {
-            validateCurrencyRegistryReferences();
+            validateCurrencyRegistryReferences(undefined, {
+                includeConfiguredAnalysisQueries: validateConfiguredAnalysisQueryCurrencies,
+            });
         }
         const registry = loadFileBackedModelRegistry();
         await syncRegistryToDb(registry);

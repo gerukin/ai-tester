@@ -93,7 +93,7 @@ const loadConfiguredAnalysisQueryCurrencies = () => {
     const parsed = AnalysisQueryCurrencyConfigSchema.parse(parse(content));
     return parsed.analysisQueries ?? [];
 };
-export const validateCurrencyRegistryReferences = (registry = getFileBackedCurrencyRegistry()) => {
+export const validateCurrencyRegistryReferences = (registry = getFileBackedCurrencyRegistry(), { analysisQueries = [], includeConfiguredAnalysisQueries = true, } = {}) => {
     if (!isCurrencyRegistryConfigured())
         return;
     const missingSources = new Map();
@@ -107,7 +107,8 @@ export const validateCurrencyRegistryReferences = (registry = getFileBackedCurre
             }
         }
     }
-    for (const query of loadConfiguredAnalysisQueryCurrencies()) {
+    const configuredAnalysisQueries = includeConfiguredAnalysisQueries ? loadConfiguredAnalysisQueryCurrencies() : [];
+    for (const query of [...configuredAnalysisQueries, ...analysisQueries]) {
         if (!registry.currenciesByCode.has(query.currency)) {
             addMissingSource(query.currency, `analysis query "${query.description}"`);
         }

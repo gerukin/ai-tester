@@ -48,13 +48,16 @@ type EvaluationRunnerDeps = {
 
 type RunAllEvaluationsOptions = {
 	confirmRun?: EvaluationRunnerDeps['confirmRun']
+	testsConfig?: EvaluationRunnerDeps['testsConfig']
+	registry?: EvaluationRunnerDeps['registry']
 }
 
 const getMissingEvaluations = async (
 	db: EvaluationRunnerDeps['db'],
-	testsConfig: EvaluationRunnerDeps['testsConfig']
+	testsConfig: EvaluationRunnerDeps['testsConfig'],
+	{ log = true }: { log?: boolean } = {}
 ) => {
-	console.log('Checking for evaluations to run...')
+	if (log) console.log('Checking for evaluations to run...')
 
 	if (testsConfig.candidates.length === 0) {
 		console.log('⚠️ No active candidate models are configured.')
@@ -467,8 +470,22 @@ const createDefaultEvaluationRunnerDeps = async (): Promise<EvaluationRunnerDeps
 	}
 }
 
-export const runAllEvaluations = async ({ confirmRun }: RunAllEvaluationsOptions = {}) =>
+export const countMissingEvaluations = async ({
+	testsConfig,
+}: Pick<RunAllEvaluationsOptions, 'testsConfig'> = {}) => {
+	const [{ resolveTestsConfig }, { db }] = await Promise.all([import('../config/index.js'), import('../database/db.js')])
+	const resolvedTestsConfig = testsConfig ?? resolveTestsConfig()
+	const missingEvaluations = await getMissingEvaluations(db, resolvedTestsConfig, { log: false })
+	return missingEvaluations.reduce(
+		(acc, evaluation) => acc + (resolvedTestsConfig.evaluationsPerEvaluator - evaluation.evaluationsCount),
+		0
+	)
+}
+
+export const runAllEvaluations = async ({ confirmRun, testsConfig, registry }: RunAllEvaluationsOptions = {}) =>
 	runAllEvaluationsWithDeps({
 		...(await createDefaultEvaluationRunnerDeps()),
 		...(confirmRun ? { confirmRun } : {}),
+		...(testsConfig ? { testsConfig } : {}),
+		...(registry ? { registry } : {}),
 	})

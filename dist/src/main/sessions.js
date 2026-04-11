@@ -19,8 +19,9 @@ const logSkippedTests = (attempts, attempt) => {
         console.log(`⏭️ Skipping ${skippedAttempts} similar attempt(s)...`);
     return skippedAttempts;
 };
-const getMissingTests = async (db, testsConfig) => {
-    console.log('Checking for tests to run...');
+const getMissingTests = async (db, testsConfig, { log = true } = {}) => {
+    if (log)
+        console.log('Checking for tests to run...');
     if (testsConfig.candidates.length === 0) {
         console.log('⚠️ No active candidate models are configured.');
         return [];
@@ -267,7 +268,15 @@ const createDefaultSessionRunnerDeps = async () => {
         state,
     };
 };
-export const runAllTests = async ({ confirmRun } = {}) => runAllTestsWithDeps({
+export const countMissingTests = async ({ testsConfig } = {}) => {
+    const [{ resolveTestsConfig }, { db }] = await Promise.all([import('../config/index.js'), import('../database/db.js')]);
+    const resolvedTestsConfig = testsConfig ?? resolveTestsConfig();
+    const missingTests = await getMissingTests(db, resolvedTestsConfig, { log: false });
+    return missingTests.reduce((acc, test) => acc + (resolvedTestsConfig.attempts - test.sessionsCount), 0);
+};
+export const runAllTests = async ({ confirmRun, testsConfig, registry } = {}) => runAllTestsWithDeps({
     ...(await createDefaultSessionRunnerDeps()),
     ...(confirmRun ? { confirmRun } : {}),
+    ...(testsConfig ? { testsConfig } : {}),
+    ...(registry ? { registry } : {}),
 });

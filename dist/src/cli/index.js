@@ -1,4 +1,5 @@
 import { CliUsageError } from './errors.js';
+const STATS_MODE_ERROR = 'stats requires exactly one of --list, --query <name>, --query-json <json>, or --query-file <path>.';
 const ROOT_HELP = `Usage: ai-tester [command] [options]
 
 Commands:
@@ -8,6 +9,8 @@ Commands:
   run-evals             Sync first, then run missing evaluations.
   stats --list          List runnable analysis query descriptions.
   stats --query <name>  Run one configured analysis query by exact description.
+  stats --query-json    Run an ad hoc analysis query from inline JSON.
+  stats --query-file    Run an ad hoc analysis query from a JSON file.
 
 Options:
   -h, --help            Show help for the root command or a subcommand.`;
@@ -23,31 +26,42 @@ Synchronize currencies, providers, structured objects, tools, prompts, and tests
 
 Options:
   -h, --help            Show this help message.`;
-const RUN_TESTS_HELP = `Usage: ai-tester run-tests [--dry-run]
+const RUN_TESTS_HELP = `Usage: ai-tester run-tests [--dry-run] [--include-counts] [--config-overrides <json> | --config-overrides-file <path>]
 
 Synchronize currencies, providers, structured objects, tools, prompts, and tests,
 then run missing tests without interactive prompts.
 
 Options:
-  --dry-run             Validate the command and print the actions without mutating state.
-  -h, --help            Show this help message.`;
-const RUN_EVALS_HELP = `Usage: ai-tester run-evals [--dry-run]
+  --dry-run                  Validate the command and print the resolved action/configuration without mutating state.
+  --include-counts           With --dry-run, sync a temporary DB copy and print the missing test count.
+  --config-overrides <json>  Shallow-replace test run config fields from inline JSON.
+  --config-overrides-file    Shallow-replace test run config fields from a JSON file.
+  -h, --help                 Show this help message.`;
+const RUN_EVALS_HELP = `Usage: ai-tester run-evals [--dry-run] [--include-counts] [--config-overrides <json> | --config-overrides-file <path>]
 
 Synchronize currencies, providers, structured objects, tools, prompts, and tests,
 then run missing evaluations without interactive prompts.
 
 Options:
-  --dry-run             Validate the command and print the actions without mutating state.
-  -h, --help            Show this help message.`;
+  --dry-run                  Validate the command and print the resolved action/configuration without mutating state.
+  --include-counts           With --dry-run, sync a temporary DB copy and print the missing evaluation count.
+  --config-overrides <json>  Shallow-replace evaluation run config fields from inline JSON.
+  --config-overrides-file    Shallow-replace evaluation run config fields from a JSON file.
+  -h, --help                 Show this help message.`;
 const STATS_HELP = `Usage:
   ai-tester stats --list
-  ai-tester stats --query <name>
+  ai-tester stats --query <name> [--dry-run]
+  ai-tester stats --query-json <json> [--dry-run]
+  ai-tester stats --query-file <path> [--dry-run]
 
-List configured analysis queries or run one by exact description.
+List configured analysis queries, run one by exact description, or run an ad hoc query.
 
 Options:
   --list                Print runnable analysis query descriptions, one per line.
-  --query <name>        Run the matching analysis query.
+  --query <name>        Run the matching configured analysis query.
+  --query-json <json>   Run an ad hoc analysis query from inline JSON.
+  --query-file <path>   Run an ad hoc analysis query from a JSON file.
+  --dry-run             Validate and print the resolved query without running stats.
   -h, --help            Show this help message.`;
 const isHelpFlag = (value) => value === '-h' || value === '--help';
 const createDefaultDeps = () => ({
@@ -56,7 +70,9 @@ const createDefaultDeps = () => ({
     runTestsWithSync: async (options) => (await import('./actions.js')).runTestsWithSync(options),
     runEvalsWithSync: async (options) => (await import('./actions.js')).runEvalsWithSync(options),
     listStatsQueries: async () => (await import('./actions.js')).listStatsQueries(),
-    runStatsQueryByDescription: async (description) => (await import('./actions.js')).runStatsQueryByDescription(description),
+    runStatsQueryByDescription: async (description, options) => (await import('./actions.js')).runStatsQueryByDescription(description, options),
+    runStatsQueryJson: async (json, options) => (await import('./actions.js')).runStatsQueryJson(json, options),
+    runStatsQueryFile: async (filePath, options) => (await import('./actions.js')).runStatsQueryFile(filePath, options),
     runMigrations: async () => (await import('./actions.js')).runMigrations(),
 });
 const ensureNoExtraArgs = (command, args) => {
@@ -64,53 +80,108 @@ const ensureNoExtraArgs = (command, args) => {
         throw new CliUsageError(`Unexpected argument for ${command}: ${args[0]}`);
     }
 };
-const parseDryRunArgs = (command, args) => {
+const readOptionValue = (command, option, args, index) => {
+    const next = args[index + 1];
+    if (next === undefined) {
+        throw new CliUsageError(`Missing value for ${command} ${option}.`);
+    }
+    return next;
+};
+const parseRunWithOverridesArgs = (command, args) => {
     let dryRun = false;
-    for (const arg of args) {
+    let includeCounts = false;
+    let configOverridesJson;
+    let configOverridesFile;
+    for (let index = 0; index < args.length; index++) {
+        const arg = args[index];
         if (arg === '--dry-run') {
             dryRun = true;
             continue;
         }
+        if (arg === '--include-counts') {
+            includeCounts = true;
+            continue;
+        }
+        if (arg === '--config-overrides') {
+            if (configOverridesJson !== undefined || configOverridesFile !== undefined) {
+                throw new CliUsageError(`${command} accepts only one runtime override source.`);
+            }
+            configOverridesJson = readOptionValue(command, arg, args, index);
+            index += 1;
+            continue;
+        }
+        if (arg === '--config-overrides-file') {
+            if (configOverridesJson !== undefined || configOverridesFile !== undefined) {
+                throw new CliUsageError(`${command} accepts only one runtime override source.`);
+            }
+            configOverridesFile = readOptionValue(command, arg, args, index);
+            index += 1;
+            continue;
+        }
         if (isHelpFlag(arg))
-            return { help: true, dryRun };
+            return { help: true, dryRun, includeCounts };
         throw new CliUsageError(`Unknown option for ${command}: ${arg}`);
     }
-    return { help: false, dryRun };
+    if (includeCounts && !dryRun) {
+        throw new CliUsageError(`${command} --include-counts can only be used with --dry-run.`);
+    }
+    return { help: false, dryRun, includeCounts, configOverridesJson, configOverridesFile };
 };
 const parseStatsArgs = (args) => {
     let shouldList = false;
     let queryName;
-    let queryProvided = false;
+    let queryJson;
+    let queryFile;
+    let dryRun = false;
     for (let index = 0; index < args.length; index++) {
         const arg = args[index];
         if (isHelpFlag(arg))
-            return { help: true, shouldList, queryName, queryProvided };
+            return { help: true, shouldList, queryName, queryJson, queryFile, dryRun };
+        if (arg === '--dry-run') {
+            dryRun = true;
+            continue;
+        }
         if (arg === '--list') {
-            if (shouldList || queryProvided) {
-                throw new CliUsageError('stats requires exactly one of --list or --query <name>.');
+            if (shouldList || queryName !== undefined || queryJson !== undefined || queryFile !== undefined) {
+                throw new CliUsageError(STATS_MODE_ERROR);
             }
             shouldList = true;
             continue;
         }
         if (arg === '--query') {
-            if (queryProvided || shouldList) {
-                throw new CliUsageError('stats requires exactly one of --list or --query <name>.');
+            if (shouldList || queryName !== undefined || queryJson !== undefined || queryFile !== undefined) {
+                throw new CliUsageError(STATS_MODE_ERROR);
             }
-            const next = args[index + 1];
-            if (next === undefined) {
-                throw new CliUsageError('Missing value for stats --query.');
+            queryName = readOptionValue('stats', arg, args, index);
+            index += 1;
+            continue;
+        }
+        if (arg === '--query-json') {
+            if (shouldList || queryName !== undefined || queryJson !== undefined || queryFile !== undefined) {
+                throw new CliUsageError(STATS_MODE_ERROR);
             }
-            queryProvided = true;
-            queryName = next;
+            queryJson = readOptionValue('stats', arg, args, index);
+            index += 1;
+            continue;
+        }
+        if (arg === '--query-file') {
+            if (shouldList || queryName !== undefined || queryJson !== undefined || queryFile !== undefined) {
+                throw new CliUsageError(STATS_MODE_ERROR);
+            }
+            queryFile = readOptionValue('stats', arg, args, index);
             index += 1;
             continue;
         }
         throw new CliUsageError(`Unknown option for stats: ${arg}`);
     }
-    if (shouldList === queryProvided) {
-        throw new CliUsageError('stats requires exactly one of --list or --query <name>.');
+    const modeCount = [shouldList, queryName !== undefined, queryJson !== undefined, queryFile !== undefined].filter(Boolean).length;
+    if (modeCount !== 1) {
+        throw new CliUsageError(STATS_MODE_ERROR);
     }
-    return { help: false, shouldList, queryName, queryProvided };
+    if (shouldList && dryRun) {
+        throw new CliUsageError('stats --dry-run can only be used with --query, --query-json, or --query-file.');
+    }
+    return { help: false, shouldList, queryName, queryJson, queryFile, dryRun };
 };
 const printHelp = (text) => {
     console.log(text);
@@ -144,21 +215,31 @@ export const runCli = async (argv, deps = createDefaultDeps()) => {
                 await deps.syncAll();
                 return 0;
             case 'run-tests': {
-                const parsed = parseDryRunArgs(command, rest);
+                const parsed = parseRunWithOverridesArgs(command, rest);
                 if (parsed.help) {
                     printHelp(RUN_TESTS_HELP);
                     return 0;
                 }
-                await deps.runTestsWithSync({ dryRun: parsed.dryRun });
+                await deps.runTestsWithSync({
+                    dryRun: parsed.dryRun,
+                    includeCounts: parsed.includeCounts,
+                    configOverridesJson: parsed.configOverridesJson,
+                    configOverridesFile: parsed.configOverridesFile,
+                });
                 return 0;
             }
             case 'run-evals': {
-                const parsed = parseDryRunArgs(command, rest);
+                const parsed = parseRunWithOverridesArgs(command, rest);
                 if (parsed.help) {
                     printHelp(RUN_EVALS_HELP);
                     return 0;
                 }
-                await deps.runEvalsWithSync({ dryRun: parsed.dryRun });
+                await deps.runEvalsWithSync({
+                    dryRun: parsed.dryRun,
+                    includeCounts: parsed.includeCounts,
+                    configOverridesJson: parsed.configOverridesJson,
+                    configOverridesFile: parsed.configOverridesFile,
+                });
                 return 0;
             }
             case 'stats': {
@@ -171,7 +252,15 @@ export const runCli = async (argv, deps = createDefaultDeps()) => {
                     await deps.listStatsQueries();
                     return 0;
                 }
-                await deps.runStatsQueryByDescription(parsed.queryName);
+                if (parsed.queryName !== undefined) {
+                    await deps.runStatsQueryByDescription(parsed.queryName, { dryRun: parsed.dryRun });
+                    return 0;
+                }
+                if (parsed.queryJson !== undefined) {
+                    await deps.runStatsQueryJson(parsed.queryJson, { dryRun: parsed.dryRun });
+                    return 0;
+                }
+                await deps.runStatsQueryFile(parsed.queryFile, { dryRun: parsed.dryRun });
                 return 0;
             }
             default:

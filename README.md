@@ -46,17 +46,25 @@ ai-tester sync
 # Dry-run the expensive run flows
 ai-tester run-tests --dry-run
 ai-tester run-evals --dry-run
+ai-tester run-tests --dry-run --include-counts
+ai-tester run-evals --dry-run --include-counts
+ai-tester run-tests --dry-run --config-overrides '{"attempts":2,"requiredTags1":["smoke"]}'
+ai-tester run-evals --dry-run --config-overrides-file .local/eval-overrides.json
 
 # Execute them headlessly
 ai-tester run-tests
 ai-tester run-evals
+ai-tester run-tests --config-overrides '{"candidatesTemperature":0.2}'
 
-# List and run configured analysis queries
+# List and run configured or ad hoc analysis queries
 ai-tester stats --list
 ai-tester stats --query "My query description"
+ai-tester stats --query-json '{"currency":"USD","requiredTags1":["smoke"]}'
+ai-tester stats --dry-run --query-file .local/stats-query.json
 ```
 
 `ai-tester` with no arguments keeps the current interactive behavior. The `run-tests` and `run-evals` commands automatically sync currencies, providers, structured objects, tools, prompts, and tests before executing missing work.
+Non-interactive run commands can shallow-replace the relevant config-file fields at runtime with `--config-overrides` or `--config-overrides-file`; omitted fields keep their config-file values.
 
 ## Automated tests
 

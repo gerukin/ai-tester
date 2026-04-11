@@ -27,6 +27,15 @@ When modifying the evaluation instructions, a new current version (or new curren
 
 Tags can be added to any test file. They are used to filter in/out which tests are run based on the tags in the config file. They can also be used for analysis and statistics.
 
+For one-off non-interactive runs, tags can also be supplied at runtime without editing the config file:
+
+```sh
+ai-tester run-tests --config-overrides '{"requiredTags1":["lang_en"],"prohibitedTags":["skip"]}'
+ai-tester run-evals --config-overrides '{"requiredTags2":["reasoning"],"evaluationsPerEvaluator":2}'
+```
+
+Runtime overrides use the same tag fields as the config file and shallow-replace only the fields present in the JSON payload.
+
 ### Special tags
 
 Special tags start with a `_` and are used to trigger specific actions in the system. As they are meaningful and influence how the test is run, they will trigger a new version each time they are added or removed.

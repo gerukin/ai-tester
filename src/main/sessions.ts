@@ -51,13 +51,16 @@ type SessionRunnerDeps = {
 
 type RunAllTestsOptions = {
 	confirmRun?: SessionRunnerDeps['confirmRun']
+	testsConfig?: SessionRunnerDeps['testsConfig']
+	registry?: SessionRunnerDeps['registry']
 }
 
 const getMissingTests = async (
 	db: SessionRunnerDeps['db'],
-	testsConfig: SessionRunnerDeps['testsConfig']
+	testsConfig: SessionRunnerDeps['testsConfig'],
+	{ log = true }: { log?: boolean } = {}
 ) => {
-	console.log('Checking for tests to run...')
+	if (log) console.log('Checking for tests to run...')
 
 	if (testsConfig.candidates.length === 0) {
 		console.log('⚠️ No active candidate models are configured.')
@@ -426,8 +429,17 @@ const createDefaultSessionRunnerDeps = async (): Promise<SessionRunnerDeps> => {
 	}
 }
 
-export const runAllTests = async ({ confirmRun }: RunAllTestsOptions = {}) =>
+export const countMissingTests = async ({ testsConfig }: Pick<RunAllTestsOptions, 'testsConfig'> = {}) => {
+	const [{ resolveTestsConfig }, { db }] = await Promise.all([import('../config/index.js'), import('../database/db.js')])
+	const resolvedTestsConfig = testsConfig ?? resolveTestsConfig()
+	const missingTests = await getMissingTests(db, resolvedTestsConfig, { log: false })
+	return missingTests.reduce((acc, test) => acc + (resolvedTestsConfig.attempts - test.sessionsCount), 0)
+}
+
+export const runAllTests = async ({ confirmRun, testsConfig, registry }: RunAllTestsOptions = {}) =>
 	runAllTestsWithDeps({
 		...(await createDefaultSessionRunnerDeps()),
 		...(confirmRun ? { confirmRun } : {}),
+		...(testsConfig ? { testsConfig } : {}),
+		...(registry ? { registry } : {}),
 	})

@@ -279,13 +279,17 @@ const syncRegistryToDb = async (registry: FileBackedModelRegistry) => {
 	})
 }
 
-export async function updateProvidersInDb() {
+export async function updateProvidersInDb({
+	validateConfiguredAnalysisQueryCurrencies = true,
+}: { validateConfiguredAnalysisQueryCurrencies?: boolean } = {}) {
 	console.log('Updating providers and models in the database...')
 
 	try {
 		clearFileBackedModelRegistryCache()
 		if (isCurrencyRegistryConfigured()) {
-			validateCurrencyRegistryReferences()
+			validateCurrencyRegistryReferences(undefined, {
+				includeConfiguredAnalysisQueries: validateConfiguredAnalysisQueryCurrencies,
+			})
 		}
 		const registry = loadFileBackedModelRegistry()
 		await syncRegistryToDb(registry)

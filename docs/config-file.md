@@ -144,6 +144,25 @@ Analysis query descriptions must be unique. The CLI uses the exact description s
 
 Analysis queries can also be scoped by candidate system prompt with `systemPrompts`. Each list entry is matched against either the stable prompt `id`/database `code` or an exact prompt version hash. Entries are ORed together, so a session is included when its candidate system prompt matches any listed value. Omit `systemPrompts` or set it to an empty list to leave system prompts unrestricted.
 
+### Runtime CLI overrides
+
+Headless commands can replace the relevant config-file fields for one run without editing `AI_TESTER_CONFIG_PATH`.
+The payload is JSON and uses the same field names and validation rules as the config file.
+Overrides are shallow: an omitted field keeps the config-file value, while a provided array replaces that whole array.
+
+```sh
+ai-tester run-tests --config-overrides '{"attempts":2,"requiredTags1":["smoke"]}'
+ai-tester run-tests --dry-run --include-counts --config-overrides '{"requiredTags2":["cat_math"]}'
+ai-tester run-evals --config-overrides-file .local/eval-overrides.json
+ai-tester stats --query-json '{"currency":"USD","requiredTags1":["smoke"],"systemPrompts":["helpful"]}'
+ai-tester stats --dry-run --query-file .local/stats-query.json
+```
+
+`run-tests` accepts candidate models, candidate temperature, attempts, and required/prohibited tags.
+`run-evals` accepts candidate and evaluator models, candidate and evaluator temperatures, evaluations per evaluator, and required/prohibited tags.
+Add `--include-counts` to a dry-run test or evaluation command to sync a temporary copy of the configured database and print the missing work count without touching the real database.
+Ad hoc stats queries accept the same fields as entries in `analysisQueries`; `description` may be omitted and defaults to `Ad hoc query`.
+
 > [!NOTE]
 > Only active tests with completed evaluations are shown in the analysis queries.
 >

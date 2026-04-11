@@ -95,7 +95,16 @@ const operationMap = {
 	},
 	'cli:dispatch': async () => {
 		const args = (payload.args ?? {}) as { argv?: string[] }
-		const calls: Array<{ name: string; dryRun?: boolean; description?: string }> = []
+		const calls: Array<{
+			name: string
+			dryRun?: boolean
+			includeCounts?: boolean
+			description?: string
+			json?: string
+			filePath?: string
+			configOverridesJson?: string
+			configOverridesFile?: string
+		}> = []
 		const { runCli } = await import('../../src/cli/index.js')
 		return captureConsole(async () => ({
 			exitCode: await runCli(args.argv ?? [], {
@@ -106,16 +115,42 @@ const operationMap = {
 					calls.push({ name: 'sync' })
 				},
 				runTestsWithSync: async options => {
-					calls.push({ name: 'run-tests', dryRun: options?.dryRun })
+					calls.push({
+						name: 'run-tests',
+						dryRun: options?.dryRun,
+						...(options?.includeCounts ? { includeCounts: true } : {}),
+						...(options?.configOverridesJson !== undefined
+							? { configOverridesJson: options.configOverridesJson }
+							: {}),
+						...(options?.configOverridesFile !== undefined
+							? { configOverridesFile: options.configOverridesFile }
+							: {}),
+					})
 				},
 				runEvalsWithSync: async options => {
-					calls.push({ name: 'run-evals', dryRun: options?.dryRun })
+					calls.push({
+						name: 'run-evals',
+						dryRun: options?.dryRun,
+						...(options?.includeCounts ? { includeCounts: true } : {}),
+						...(options?.configOverridesJson !== undefined
+							? { configOverridesJson: options.configOverridesJson }
+							: {}),
+						...(options?.configOverridesFile !== undefined
+							? { configOverridesFile: options.configOverridesFile }
+							: {}),
+					})
 				},
 				listStatsQueries: async () => {
 					calls.push({ name: 'stats:list' })
 				},
-				runStatsQueryByDescription: async description => {
-					calls.push({ name: 'stats:query', description })
+				runStatsQueryByDescription: async (description, options) => {
+					calls.push({ name: 'stats:query', description, ...(options?.dryRun ? { dryRun: true } : {}) })
+				},
+				runStatsQueryJson: async (json, options) => {
+					calls.push({ name: 'stats:query-json', json, ...(options?.dryRun ? { dryRun: true } : {}) })
+				},
+				runStatsQueryFile: async (filePath, options) => {
+					calls.push({ name: 'stats:query-file', filePath, ...(options?.dryRun ? { dryRun: true } : {}) })
 				},
 				runMigrations: async () => {
 					calls.push({ name: 'migrate' })
@@ -123,6 +158,20 @@ const operationMap = {
 			}),
 			calls,
 		}))
+	},
+	'actions:runTestsWithSyncCancelled': async () => {
+		const { runTestsWithSync } = await import('../../src/cli/actions.js')
+		return captureConsole(async () => {
+			let confirmCalls = 0
+			await runTestsWithSync({
+				configOverridesJson: '{',
+				confirmSync: async () => {
+					confirmCalls += 1
+					return false
+				},
+			})
+			return { confirmCalls }
+		})
 	},
 	'openRouter:getModels': async () => {
 		const args = (payload.args ?? {}) as {
