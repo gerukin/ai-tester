@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-04-11
+
+### Changed
+
+- Packaged agent guidance now warns agents to run DB-accessing `ai-tester` commands sequentially to avoid local database locks.
+
 ## [0.18.0] - 2026-04-11
 
 ### Added
@@ -194,7 +200,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - 🎉 Version `0.9.0` is out... with all the base features. It isn't quite yet stable or tested enough to be relied upon.
 
-[Unreleased]: https://github.com/gerukin/ai-tester/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/gerukin/ai-tester/compare/v0.18.1...HEAD
+[0.18.1]: https://github.com/gerukin/ai-tester/compare/v0.18.0...v0.18.1
 [0.18.0]: https://github.com/gerukin/ai-tester/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/gerukin/ai-tester/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/gerukin/ai-tester/compare/v0.15.0...v0.16.0
