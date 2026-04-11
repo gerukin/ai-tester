@@ -41,6 +41,8 @@ npm run start:dev
 # Show help
 ai-tester --help
 ai-tester stats --help
+ai-tester list --models
+ai-tester list --tags --prompts --currencies
 
 # Run migrations
 ai-tester migrate

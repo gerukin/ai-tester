@@ -110,6 +110,12 @@ const operationMap = {
 			filePath?: string
 			configOverridesJson?: string
 			configOverridesFile?: string
+			listOptions?: {
+				models?: boolean
+				tags?: boolean
+				prompts?: boolean
+				currencies?: boolean
+			}
 		}> = []
 		const { runCli } = await import('../../src/cli/index.js')
 		return captureConsole(async () => ({
@@ -122,6 +128,9 @@ const operationMap = {
 				},
 				syncSkill: async options => {
 					calls.push({ name: 'skills:sync', replace: options?.replace })
+				},
+				listAvailableValues: async options => {
+					calls.push({ name: 'list', listOptions: options })
 				},
 				runTestsWithSync: async options => {
 					calls.push({

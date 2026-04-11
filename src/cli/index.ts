@@ -11,10 +11,18 @@ type SyncSkillCliOptions = {
 	replace?: boolean
 }
 
+type ListValueCliOptions = {
+	models?: boolean
+	tags?: boolean
+	prompts?: boolean
+	currencies?: boolean
+}
+
 type CliDeps = {
 	runInteractive: () => Promise<unknown>
 	syncAll: () => Promise<void>
 	syncSkill: (options?: SyncSkillCliOptions) => Promise<void>
+	listAvailableValues: (options: ListValueCliOptions) => Promise<void>
 	runTestsWithSync: (options?: RunWithSyncCliOptions) => Promise<void>
 	runEvalsWithSync: (options?: RunWithSyncCliOptions) => Promise<void>
 	listStatsQueries: () => Promise<void>
@@ -33,6 +41,7 @@ Commands:
   migrate               Run outstanding database migrations.
   sync                  Synchronize currencies, providers, structured objects, tools, prompts, and tests.
   skills sync           Copy the packaged ai-tester skill into .agents/skills/ai-tester.
+  list                  List file-backed values usable in runtime overrides.
   run-tests             Sync first, then run missing tests.
   run-evals             Sync first, then run missing evaluations.
   stats --list          List runnable analysis query descriptions.
@@ -42,6 +51,19 @@ Commands:
 
 Options:
   -h, --help            Show help for the root command or a subcommand.`
+
+const LIST_FLAGS = '--models, --tags, --prompts, --currencies'
+
+const LIST_HELP = `Usage: ai-tester list [--models] [--tags] [--prompts] [--currencies]
+
+List file-backed values usable in runtime overrides and ad hoc stats queries.
+
+Options:
+  --models              List active provider/model references.
+  --tags                List test tags.
+  --prompts             List non-evaluator prompt codes.
+  --currencies          List file-backed currency codes.
+  -h, --help            Show this help message.`
 
 const MIGRATE_HELP = `Usage: ai-tester migrate
 
@@ -90,6 +112,8 @@ Options:
   --include-counts           With --dry-run, sync a temporary DB copy and print the missing test count.
   --config-overrides <json>  Shallow-replace test run config fields from inline JSON.
   --config-overrides-file    Shallow-replace test run config fields from a JSON file.
+  ai-tester list --models --tags
+                              List values usable in runtime override JSON.
   -h, --help                 Show this help message.`
 
 const RUN_EVALS_HELP = `Usage: ai-tester run-evals [--dry-run] [--include-counts] [--config-overrides <json> | --config-overrides-file <path>]
@@ -102,6 +126,8 @@ Options:
   --include-counts           With --dry-run, sync a temporary DB copy and print the missing evaluation count.
   --config-overrides <json>  Shallow-replace evaluation run config fields from inline JSON.
   --config-overrides-file    Shallow-replace evaluation run config fields from a JSON file.
+  ai-tester list --models --tags
+                              List values usable in runtime override JSON.
   -h, --help                 Show this help message.`
 
 const STATS_HELP = `Usage:
@@ -118,6 +144,8 @@ Options:
   --query-json <json>   Run an ad hoc analysis query from inline JSON.
   --query-file <path>   Run an ad hoc analysis query from a JSON file.
   --dry-run             Validate and print the resolved query without running stats.
+  ai-tester list --models --tags --prompts --currencies
+                       List values usable in ad hoc stats JSON.
   -h, --help            Show this help message.`
 
 const isHelpFlag = (value: string) => value === '-h' || value === '--help'
@@ -126,6 +154,9 @@ const createDefaultDeps = (): CliDeps => ({
 	runInteractive: async () => (await import('../bootstrap.js')).runDefaultApp(),
 	syncAll: async () => (await import('./actions.js')).syncAll(),
 	syncSkill: async options => (await import('./actions.js')).syncSkill(options),
+	listAvailableValues: async options => {
+		console.log((await import('./list-values.js')).formatAvailableValues(options))
+	},
 	runTestsWithSync: async options => (await import('./actions.js')).runTestsWithSync(options),
 	runEvalsWithSync: async options => (await import('./actions.js')).runEvalsWithSync(options),
 	listStatsQueries: async () => (await import('./actions.js')).listStatsQueries(),
@@ -274,6 +305,37 @@ const parseSkillsArgs = (args: string[]) => {
 	return { help: false, sync: true, replace }
 }
 
+const parseListArgs = (args: string[]) => {
+	const options: ListValueCliOptions = {}
+
+	for (const arg of args) {
+		if (arg === '--models') {
+			options.models = true
+			continue
+		}
+		if (arg === '--tags') {
+			options.tags = true
+			continue
+		}
+		if (arg === '--prompts') {
+			options.prompts = true
+			continue
+		}
+		if (arg === '--currencies') {
+			options.currencies = true
+			continue
+		}
+		if (isHelpFlag(arg)) return { help: true, options }
+		throw new CliUsageError(`Unknown option for list: ${arg}`)
+	}
+
+	if (!options.models && !options.tags && !options.prompts && !options.currencies) {
+		throw new CliUsageError(`list requires at least one of ${LIST_FLAGS}.`)
+	}
+
+	return { help: false, options }
+}
+
 const printHelp = (text: string) => {
 	console.log(text)
 }
@@ -317,6 +379,16 @@ export const runCli = async (argv: string[], deps: CliDeps = createDefaultDeps()
 					return 0
 				}
 				await deps.syncSkill({ replace: parsed.replace })
+				return 0
+			}
+
+			case 'list': {
+				const parsed = parseListArgs(rest)
+				if (parsed.help) {
+					printHelp(LIST_HELP)
+					return 0
+				}
+				await deps.listAvailableValues(parsed.options)
 				return 0
 			}
 

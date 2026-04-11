@@ -149,6 +149,14 @@ Analysis queries can also be scoped by candidate system prompt with `systemPromp
 Headless commands can replace the relevant config-file fields for one run without editing `AI_TESTER_CONFIG_PATH`.
 The payload is JSON and uses the same field names and validation rules as the config file.
 Overrides are shallow: an omitted field keeps the config-file value, while a provided array replaces that whole array.
+Use the CLI to list file-backed values for runtime overrides:
+
+```sh
+ai-tester list --models
+ai-tester list --tags
+ai-tester list --prompts
+ai-tester list --currencies
+```
 
 ```sh
 ai-tester run-tests --config-overrides '{"attempts":2,"requiredTags1":["smoke"]}'

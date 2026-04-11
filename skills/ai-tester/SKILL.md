@@ -7,6 +7,8 @@ description: Use when working in a project where ai-tester is installed, running
 
 Use when working from the current project directory where `ai-tester` is installed.
 
+Default to the `ai-tester` CLI. It is the supported interface for listing available values, sync, dry runs, test runs, evaluation runs, stats, migrations, and skill refreshes. Do not inspect or query the database directly unless the user explicitly asks for database inspection, the CLI reports a database problem that cannot be diagnosed from command output, or you are doing an ai-tester implementation/debugging task.
+
 First locate the installed package root. Depending on the dependency name and package manager, it is usually one of:
 
 - `node_modules/@gerukin/ai-tester/`
