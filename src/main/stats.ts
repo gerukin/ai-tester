@@ -43,6 +43,7 @@ export const showStats = async (query: AnalysisQuery) => {
 		query.evaluators?.filter(
 			evaluator => evaluator.prohibitedTags !== undefined && evaluator.prohibitedTags.length > 0
 		) ?? []
+	const systemPromptRefs = query.systemPrompts ?? []
 
 	// we query the DB to get all missing tests not yet run
 	const {
@@ -56,10 +57,14 @@ export const showStats = async (query: AnalysisQuery) => {
 		currencies,
 		currencyRates,
 		modelCosts,
+		prompts,
+		promptVersions,
 	} = schema
 
 	const targetCurrencyAlias = aliasedTable(currencies, 'target_currency_alias')
 	const candidateModelAlias = aliasedTable(models, 'candidate_model_alias')
+	const candidateSystemPromptAlias = aliasedTable(prompts, 'candidate_system_prompt_alias')
+	const candidateSystemPromptVersionAlias = aliasedTable(promptVersions, 'candidate_system_prompt_version_alias')
 	const evaluatorModelVersionAlias = aliasedTable(modelVersions, 'evaluator_model_version_alias')
 	const evaluatorModelAlias = aliasedTable(models, 'evaluator_model_alias')
 	const evaluatorProviderAlias = aliasedTable(providers, 'evaluator_provider_alias')
@@ -151,6 +156,8 @@ export const showStats = async (query: AnalysisQuery) => {
 			// .innerJoin(modelCosts, eq(modelCosts.modelVersionId, modelVersions.id))
 			// .innerJoin(currencies, eq(currencies.id, modelCosts.currencyId))
 			.innerJoin(testVersions, and(eq(testVersions.id, sessions.testVersionId), eq(testVersions.active, true)))
+			.innerJoin(candidateSystemPromptVersionAlias, eq(candidateSystemPromptVersionAlias.id, sessions.candidateSysPromptVersionId))
+			.innerJoin(candidateSystemPromptAlias, eq(candidateSystemPromptAlias.id, candidateSystemPromptVersionAlias.promptId))
 			// .innerJoin(targetCurrencyAlias, eq(targetCurrencyAlias.code, query.currency))
 
 			// We will need to filter by tags
@@ -172,7 +179,15 @@ export const showStats = async (query: AnalysisQuery) => {
 							)}
 							ELSE ${query.candidatesTemperature ?? sessions.temperature}
 						END`
-						: eq(sessions.temperature, query.candidatesTemperature ?? sessions.temperature)
+						: eq(sessions.temperature, query.candidatesTemperature ?? sessions.temperature),
+					...(systemPromptRefs.length > 0
+						? [
+								or(
+									inArray(candidateSystemPromptAlias.code, systemPromptRefs),
+									inArray(candidateSystemPromptVersionAlias.hash, systemPromptRefs)
+								),
+						  ]
+						: [])
 				)
 			)
 

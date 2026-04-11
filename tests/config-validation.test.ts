@@ -137,6 +137,9 @@ test('resolveTestsConfig filters unavailable configured models from tests and an
 			'analysisQueries:',
 			'  - description: Active only',
 			'    currency: USD',
+			'    systemPrompts:',
+			'      - helpful',
+			'      - helpful-v1-hash',
 			'    candidates:',
 			'      - provider: openai',
 			'        model: gpt-4o-mini',
@@ -157,6 +160,7 @@ test('resolveTestsConfig filters unavailable configured models from tests and an
 			candidates: Array<{ provider: string; model: string }>
 			evaluators: Array<{ provider: string; model: string }>
 			analysisQueries?: Array<{
+				systemPrompts?: string[]
 				candidates?: Array<{ provider: string; model: string }>
 				evaluators?: Array<{ provider: string; model: string }>
 			}>
@@ -167,6 +171,10 @@ test('resolveTestsConfig filters unavailable configured models from tests and an
 	assert.deepStrictEqual(result.resolvedTestsConfig.evaluators, [{ provider: 'openai', model: 'gpt-4o-mini' }])
 	assert.deepStrictEqual(result.resolvedTestsConfig.analysisQueries?.[0]?.candidates, [
 		{ provider: 'openai', model: 'gpt-4o-mini' },
+	])
+	assert.deepStrictEqual(result.resolvedTestsConfig.analysisQueries?.[0]?.systemPrompts, [
+		'helpful',
+		'helpful-v1-hash',
 	])
 	assert.deepStrictEqual(result.resolvedTestsConfig.analysisQueries?.[0]?.evaluators, [])
 })

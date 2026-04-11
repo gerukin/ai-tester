@@ -58,6 +58,9 @@ const analysisQuery = z.object({
 	/** Test tags to be excluded from the stats */
 	prohibitedTags: prohibitedTags.optional(),
 
+	/** Candidate system prompt codes or version hashes to include in the stats */
+	systemPrompts: z.array(z.string()).optional(),
+
 	/** Candidate models to include in the stats */
 	candidates: models.optional(),
 

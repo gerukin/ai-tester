@@ -25,10 +25,13 @@ export const showStats = async (query) => {
     const evaluatorModelConfigsWithTags = query.evaluators?.filter(evaluator => evaluator.requiredTags !== undefined && evaluator.requiredTags.length > 0) ??
         [];
     const evaluatorModelConfigsWithProhibitedTags = query.evaluators?.filter(evaluator => evaluator.prohibitedTags !== undefined && evaluator.prohibitedTags.length > 0) ?? [];
+    const systemPromptRefs = query.systemPrompts ?? [];
     // we query the DB to get all missing tests not yet run
-    const { testVersions, testToTagRels, tags, sessions, models, modelVersions, providers, currencies, currencyRates, modelCosts, } = schema;
+    const { testVersions, testToTagRels, tags, sessions, models, modelVersions, providers, currencies, currencyRates, modelCosts, prompts, promptVersions, } = schema;
     const targetCurrencyAlias = aliasedTable(currencies, 'target_currency_alias');
     const candidateModelAlias = aliasedTable(models, 'candidate_model_alias');
+    const candidateSystemPromptAlias = aliasedTable(prompts, 'candidate_system_prompt_alias');
+    const candidateSystemPromptVersionAlias = aliasedTable(promptVersions, 'candidate_system_prompt_version_alias');
     const evaluatorModelVersionAlias = aliasedTable(modelVersions, 'evaluator_model_version_alias');
     const evaluatorModelAlias = aliasedTable(models, 'evaluator_model_alias');
     const evaluatorProviderAlias = aliasedTable(providers, 'evaluator_provider_alias');
@@ -78,6 +81,8 @@ export const showStats = async (query) => {
         // .innerJoin(modelCosts, eq(modelCosts.modelVersionId, modelVersions.id))
         // .innerJoin(currencies, eq(currencies.id, modelCosts.currencyId))
         .innerJoin(testVersions, and(eq(testVersions.id, sessions.testVersionId), eq(testVersions.active, true)))
+        .innerJoin(candidateSystemPromptVersionAlias, eq(candidateSystemPromptVersionAlias.id, sessions.candidateSysPromptVersionId))
+        .innerJoin(candidateSystemPromptAlias, eq(candidateSystemPromptAlias.id, candidateSystemPromptVersionAlias.promptId))
         // .innerJoin(targetCurrencyAlias, eq(targetCurrencyAlias.code, query.currency))
         // We will need to filter by tags
         .innerJoin(testToTagRels, eq(testToTagRels.testVersionId, testVersions.id))
@@ -90,7 +95,11 @@ export const showStats = async (query) => {
 											THEN ${candidate.temperature}`))}
 							ELSE ${query.candidatesTemperature ?? sessions.temperature}
 						END`
-        : eq(sessions.temperature, query.candidatesTemperature ?? sessions.temperature)))
+        : eq(sessions.temperature, query.candidatesTemperature ?? sessions.temperature), ...(systemPromptRefs.length > 0
+        ? [
+            or(inArray(candidateSystemPromptAlias.code, systemPromptRefs), inArray(candidateSystemPromptVersionAlias.hash, systemPromptRefs)),
+        ]
+        : [])))
         .groupBy(modelVersions.id, testVersions.id)
         .having(() => and(
     // Tag inclusions and exclusions must be done here rather than in the INNER JOIN

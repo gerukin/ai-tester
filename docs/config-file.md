@@ -91,6 +91,12 @@ analysisQueries:
     requiredTags2:
       - reasoning
 
+    # [optional] Candidate system prompts to include in the stats.
+    # Entries can be prompt ids/codes or exact prompt version hashes, and are ORed together.
+    systemPrompts:
+      - helpful-en
+      - 4b7f2c...
+
     # [optional] Temperature to apply to models in analysis queries
     # (not specified means no temperature is applied)
     candidatesTemperature: 0.5
@@ -135,6 +141,8 @@ Analysis queries are a way to pre-define queries to run on the database. These q
 - Total cost: The total cost of the evaluations (in the specified currency)
 
 Analysis query descriptions must be unique. The CLI uses the exact description string for `ai-tester stats --query "<description>"`, so duplicate descriptions are rejected during config validation.
+
+Analysis queries can also be scoped by candidate system prompt with `systemPrompts`. Each list entry is matched against either the stable prompt `id`/database `code` or an exact prompt version hash. Entries are ORed together, so a session is included when its candidate system prompt matches any listed value. Omit `systemPrompts` or set it to an empty list to leave system prompts unrestricted.
 
 > [!NOTE]
 > Only active tests with completed evaluations are shown in the analysis queries.

@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - A repository-native offline automated test suite covering runtime flows, sync flows, markdown parsing, config validation, stats, OpenRouter helpers, and app bootstrap.
 - Headless `ai-tester` CLI subcommands for migrations, file-backed sync, missing test runs, missing evaluation runs, and stats queries.
 - CLI help output via `-h` / `--help`, stats query listing via `ai-tester stats --list`, and dry-run previews for `run-tests` and `run-evals`.
+- Analysis queries can now filter stats by candidate system prompt codes or exact prompt version hashes with `systemPrompts`.
 
 ### Changed
 
