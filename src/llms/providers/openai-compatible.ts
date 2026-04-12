@@ -1,8 +1,11 @@
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 
-export default (provider: { code: string; baseURL: string; apiKeyEnvVar: string }) =>
+import type { ProviderDefinition } from '../../config/model-registry.js'
+
+export default (provider: Extract<ProviderDefinition, { type: 'openai-compatible' }>) =>
 	createOpenAICompatible({
 		name: provider.code,
 		baseURL: provider.baseURL,
 		apiKey: process.env[provider.apiKeyEnvVar],
+		supportsStructuredOutputs: provider.supportsStructuredOutputs,
 	})

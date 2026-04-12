@@ -25,6 +25,7 @@ const OpenAICompatibleProviderDefinitionSchema = BaseProviderDefinitionSchema.ex
 	type: z.literal('openai-compatible'),
 	baseURL: z.string().url(),
 	apiKeyEnvVar: z.string().min(1),
+	supportsStructuredOutputs: z.boolean().default(false),
 })
 
 const BasicProviderDefinitionSchema = BaseProviderDefinitionSchema.extend({

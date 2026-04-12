@@ -72,3 +72,6 @@ The runtime normalizes this to Ollama's OpenAI-compatible `/v1` endpoint interna
 ### OpenAI-compatible providers
 
 - `OPENROUTER_API_KEY`: Your OpenRouter API key, when using an OpenRouter provider YAML.
+
+OpenAI-compatible provider YAML files can opt into AI SDK structured outputs with `supportsStructuredOutputs: true`.
+For OpenRouter, set this when the model's supported parameters include `structured_outputs`.

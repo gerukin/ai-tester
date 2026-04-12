@@ -191,6 +191,65 @@ test('model registry rejects duplicate provider codes', async t => {
 	expectModuleFailure(env.runModule('modelRegistry:loadProviders'), /Duplicate provider code found in YAML files/)
 })
 
+test('model registry loads openai-compatible structured output support flag', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	await env.write(
+		'data/providers/openrouter.yaml',
+		[
+			'code: openrouter',
+			'name: OpenRouter',
+			'type: openai-compatible',
+			'baseURL: https://openrouter.ai/api/v1',
+			'apiKeyEnvVar: OPENROUTER_API_KEY',
+			'supportsStructuredOutputs: true',
+		].join('\n')
+	)
+	await env.write(
+		'data/providers/compatible.yaml',
+		[
+			'code: compatible',
+			'name: Compatible',
+			'type: openai-compatible',
+			'baseURL: https://compatible.example.com/v1',
+			'apiKeyEnvVar: COMPATIBLE_API_KEY',
+		].join('\n')
+	)
+
+	const providers = expectModuleSuccess(env.runModule('modelRegistry:loadProviders')) as Array<{
+		code: string
+		supportsStructuredOutputs?: boolean
+	}>
+
+	const byCode = new Map(providers.map(provider => [provider.code, provider]))
+	assert.strictEqual(byCode.get('openrouter')?.supportsStructuredOutputs, true)
+	assert.strictEqual(byCode.get('compatible')?.supportsStructuredOutputs, false)
+})
+
+test('model registry rejects invalid openai-compatible structured output support flag', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	await env.write(
+		'data/providers/openrouter.yaml',
+		[
+			'code: openrouter',
+			'name: OpenRouter',
+			'type: openai-compatible',
+			'baseURL: https://openrouter.ai/api/v1',
+			'apiKeyEnvVar: OPENROUTER_API_KEY',
+			'supportsStructuredOutputs: 1',
+		].join('\n')
+	)
+
+	expectModuleFailure(env.runModule('modelRegistry:loadProviders'), /Expected boolean/)
+})
+
 test('model registry rejects model definitions that reference missing providers', async t => {
 	const env = await createSyncTestEnv()
 	t.after(async () => {

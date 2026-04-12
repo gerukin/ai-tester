@@ -25,6 +25,7 @@ name: OpenRouter
 type: openai-compatible
 baseURL: https://openrouter.ai/api/v1
 apiKeyEnvVar: OPENROUTER_API_KEY
+supportsStructuredOutputs: true
 ```
 
 Supported provider runtime `type` values:
@@ -37,6 +38,10 @@ Supported provider runtime `type` values:
 - `openai-compatible`
 
 `openai-compatible` is the generic option for providers such as OpenRouter.
+
+For OpenAI-compatible providers, `supportsStructuredOutputs` is optional and defaults to `false`.
+Set it to `true` only when the provider and selected models support OpenAI-style JSON schema response formats.
+For OpenRouter, enable it when using models whose supported parameters include `structured_outputs`; this lets structured-response tests and evaluator judgments use AI SDK structured outputs without falling back to plain JSON object mode.
 
 ## Model files
 
