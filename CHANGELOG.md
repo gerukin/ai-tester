@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-04-12
+
+### Fixed
+
+- OpenAI-compatible provider YAML can now opt into AI SDK structured outputs, and the bundled OpenRouter provider enables that support so structured-response runs and evaluator judgments use JSON schema response format instead of falling back to JSON object mode.
+
 ## [0.19.0] - 2026-04-12
 
 ### Added
@@ -207,7 +213,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - 🎉 Version `0.9.0` is out... with all the base features. It isn't quite yet stable or tested enough to be relied upon.
 
-[Unreleased]: https://github.com/gerukin/ai-tester/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/gerukin/ai-tester/compare/v0.19.1...HEAD
+[0.19.1]: https://github.com/gerukin/ai-tester/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/gerukin/ai-tester/compare/v0.18.1...v0.19.0
 [0.18.1]: https://github.com/gerukin/ai-tester/compare/v0.18.0...v0.18.1
 [0.18.0]: https://github.com/gerukin/ai-tester/compare/v0.17.0...v0.18.0
