@@ -10,6 +10,13 @@ import { schema } from '../database/schema.js'
 import { getSectionsFromMarkdownContent, sectionsToAiMessages } from '../utils/markdown.js'
 import { getRequiredLanguageModelTokenUsage, getTrimmedReasoningText } from '../utils/ai-sdk.js'
 import type { FileBackedModelRegistry } from '../config/model-registry.js'
+import {
+	getModelCapabilityStatus,
+	logCapabilitySkip,
+	warnIfCapabilitiesUndeclared,
+	type CapabilityRequirements,
+} from './capabilities.js'
+import { refreshEvaluationTokenLimitState } from './token-limits.js'
 
 const evalSchema = z.object({
 	// Note: `.nullable()` is not supported by some providers (like Vertex AI) as it generates an unsupported `anyOf` schema
@@ -31,6 +38,7 @@ type EvaluationRunnerDeps = {
 	db: {
 		select: typeof import('../database/db.js').db.select
 		insert: typeof import('../database/db.js').db.insert
+		update: typeof import('../database/db.js').db.update
 	}
 	testsConfig: ReturnType<typeof import('../config/config-file.js').resolveTestsConfig>
 	registry: FileBackedModelRegistry
@@ -55,9 +63,13 @@ type RunAllEvaluationsOptions = {
 const getMissingEvaluations = async (
 	db: EvaluationRunnerDeps['db'],
 	testsConfig: EvaluationRunnerDeps['testsConfig'],
+	registry: FileBackedModelRegistry,
+	envConfig: Pick<EvaluationRunnerDeps['envConfig'], 'MAX_EVALUATION_OUTPUT_TOKENS'>,
 	{ log = true }: { log?: boolean } = {}
 ) => {
 	if (log) console.log('Checking for evaluations to run...')
+
+	await refreshEvaluationTokenLimitState(db, envConfig.MAX_EVALUATION_OUTPUT_TOKENS)
 
 	if (testsConfig.candidates.length === 0) {
 		console.log('⚠️ No active candidate models are configured.')
@@ -108,7 +120,7 @@ const getMissingEvaluations = async (
 	const evaluatorModelAlias = aliasedTable(models, 'evaluator_model_alias')
 
 	const testSysPromptAlias = aliasedTable(promptVersions, 'test_sys_prompt_alias')
-	return db
+	const missingEvaluations = await db
 		.select({
 			modelVersionId: modelVersions.id,
 			modelVersionCode: modelVersions.providerModelCode,
@@ -146,6 +158,7 @@ const getMissingEvaluations = async (
 			sessions,
 			and(
 				eq(sessions.id, sessions.id),
+				eq(sessions.active, true),
 				candidateModelConfigsWithTemperature.length > 0
 					? sql`${sessions.temperature} = CASE
 							${sql.join(
@@ -204,6 +217,7 @@ const getMissingEvaluations = async (
 				eq(sessionEvaluations.modelVersionId, modelVersions.id),
 				eq(sessionEvaluations.evaluationPromptVersionId, promptVersions.id),
 				eq(sessionEvaluations.testEvaluationInstructionsVersionId, testEvaluationInstructionsVersions.id),
+				eq(sessionEvaluations.active, true),
 				modelConfigsWithTemperature.length > 0
 					? sql`${sessionEvaluations.temperature} = CASE
 								${sql.join(
@@ -306,6 +320,25 @@ const getMissingEvaluations = async (
 		// ordering by model id is important as Ollama and other local models have some initial load time to consider
 		// and switching models regularly can be slow
 		.orderBy(modelVersions.id, sessions.id, promptVersions.id)
+
+	const warnedModelReferences = new Set<string>()
+	const requirements: CapabilityRequirements = {
+		input: ['text'],
+		output: ['structured'],
+	}
+	return missingEvaluations.filter(evaluation => {
+		const modelReference = `${evaluation.providerCode}:${evaluation.modelVersionCode}`
+		const modelDefinition = registry.modelsByReference.get(modelReference)
+		if (log) warnIfCapabilitiesUndeclared(modelDefinition, modelReference, warnedModelReferences)
+		const capabilityStatus = getModelCapabilityStatus(modelDefinition, requirements)
+		if (capabilityStatus && !capabilityStatus.supported) {
+			if (log) {
+				logCapabilitySkip('evaluation', modelReference, evaluation.sessionId, capabilityStatus.missing)
+			}
+			return false
+		}
+		return true
+	})
 }
 
 export const runAllEvaluationsWithDeps = async ({
@@ -323,7 +356,7 @@ export const runAllEvaluationsWithDeps = async ({
 	state.startRun()
 
 	const { sessionEvaluations } = schema
-	const missingEvaluations = await getMissingEvaluations(db, testsConfig)
+	const missingEvaluations = await getMissingEvaluations(db, testsConfig, registry, envConfig)
 	const modelConfigsWithTemperature = testsConfig.evaluators.filter(evaluator => evaluator.temperature !== undefined)
 	const modelsWithTemperatures = new Map<string, number>(
 		modelConfigsWithTemperature.map(({ provider, model, temperature }) => [`${provider}:${model}`, temperature!])
@@ -424,6 +457,8 @@ export const runAllEvaluationsWithDeps = async ({
 				completionTokens,
 				promptTokens,
 				timeTaken: endTime - startTime,
+				finishReason: response.finishReason ?? null,
+				maxOutputTokens: envConfig.MAX_EVALUATION_OUTPUT_TOKENS,
 			})
 
 			console.log(
@@ -473,9 +508,14 @@ const createDefaultEvaluationRunnerDeps = async (): Promise<EvaluationRunnerDeps
 export const countMissingEvaluations = async ({
 	testsConfig,
 }: Pick<RunAllEvaluationsOptions, 'testsConfig'> = {}) => {
-	const [{ resolveTestsConfig }, { db }] = await Promise.all([import('../config/index.js'), import('../database/db.js')])
+	const [{ resolveTestsConfig, getFileBackedModelRegistry, envConfig }, { db }] = await Promise.all([
+		import('../config/index.js'),
+		import('../database/db.js'),
+	])
 	const resolvedTestsConfig = testsConfig ?? resolveTestsConfig()
-	const missingEvaluations = await getMissingEvaluations(db, resolvedTestsConfig, { log: false })
+	const missingEvaluations = await getMissingEvaluations(db, resolvedTestsConfig, getFileBackedModelRegistry(), envConfig, {
+		log: false,
+	})
 	return missingEvaluations.reduce(
 		(acc, evaluation) => acc + (resolvedTestsConfig.evaluationsPerEvaluator - evaluation.evaluationsCount),
 		0

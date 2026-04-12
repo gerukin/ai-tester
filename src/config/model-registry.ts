@@ -47,6 +47,26 @@ export const CostDefinitionSchema = z.object({
 })
 export type CostDefinition = z.infer<typeof CostDefinitionSchema>
 
+const InputCapabilitiesSchema = z.object({
+	text: z.boolean().default(false),
+	image: z.boolean().default(false),
+	file: z.boolean().default(false),
+	pdf: z.boolean().default(false),
+})
+
+const OutputCapabilitiesSchema = z.object({
+	text: z.boolean().default(false),
+	structured: z.boolean().default(false),
+	tools: z.boolean().default(false),
+	reasoning: z.boolean().default(false),
+})
+
+const ModelCapabilitiesSchema = z.object({
+	input: InputCapabilitiesSchema.default({}),
+	output: OutputCapabilitiesSchema.default({}),
+})
+export type ModelCapabilities = z.infer<typeof ModelCapabilitiesSchema>
+
 const JsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
 	z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(JsonValueSchema), z.record(JsonValueSchema)])
 )
@@ -83,6 +103,7 @@ export const ModelDefinitionSchema = z.object({
 	active: z.boolean().default(true),
 	providerOptions: z.record(JsonValueSchema).default({}),
 	thinking: ThinkingConfigSchema,
+	capabilities: ModelCapabilitiesSchema.optional(),
 	candidateOverrides: RuntimeOptionsOverrideSchema.optional(),
 	evaluatorOverrides: RuntimeOptionsOverrideSchema.optional(),
 	costs: z

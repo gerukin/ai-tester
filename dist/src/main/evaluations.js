@@ -7,6 +7,8 @@ import z from 'zod';
 import { schema } from '../database/schema.js';
 import { getSectionsFromMarkdownContent, sectionsToAiMessages } from '../utils/markdown.js';
 import { getRequiredLanguageModelTokenUsage, getTrimmedReasoningText } from '../utils/ai-sdk.js';
+import { getModelCapabilityStatus, logCapabilitySkip, warnIfCapabilitiesUndeclared, } from './capabilities.js';
+import { refreshEvaluationTokenLimitState } from './token-limits.js';
 const evalSchema = z.object({
     // Note: `.nullable()` is not supported by some providers (like Vertex AI) as it generates an unsupported `anyOf` schema
     feedback: z
@@ -17,9 +19,10 @@ const evalSchema = z.object({
         .boolean()
         .describe("A boolean value indicating whether the AI candidate's response is as expected in the evaluation instructions."),
 });
-const getMissingEvaluations = async (db, testsConfig, { log = true } = {}) => {
+const getMissingEvaluations = async (db, testsConfig, registry, envConfig, { log = true } = {}) => {
     if (log)
         console.log('Checking for evaluations to run...');
+    await refreshEvaluationTokenLimitState(db, envConfig.MAX_EVALUATION_OUTPUT_TOKENS);
     if (testsConfig.candidates.length === 0) {
         console.log('⚠️ No active candidate models are configured.');
         return [];
@@ -41,7 +44,7 @@ const getMissingEvaluations = async (db, testsConfig, { log = true } = {}) => {
     const candidateModelAlias = aliasedTable(models, 'candidate_model_alias');
     const evaluatorModelAlias = aliasedTable(models, 'evaluator_model_alias');
     const testSysPromptAlias = aliasedTable(promptVersions, 'test_sys_prompt_alias');
-    return db
+    const missingEvaluations = await db
         .select({
         modelVersionId: modelVersions.id,
         modelVersionCode: modelVersions.providerModelCode,
@@ -60,7 +63,7 @@ const getMissingEvaluations = async (db, testsConfig, { log = true } = {}) => {
         .innerJoin(evaluatorModelAlias, and(eq(evaluatorModelAlias.id, modelVersions.modelId), eq(evaluatorModelAlias.active, true), eq(modelVersions.active, true)))
         .innerJoin(providers, and(eq(providers.id, modelVersions.providerId), eq(providers.active, true), or(...testsConfig.evaluators.map(({ provider, model }) => and(eq(providers.code, provider), eq(modelVersions.providerModelCode, model))))))
         // always true to fetch all possible session combinations (we will filter later - cross joins aren't supported in drizzle-orm as of now)
-        .innerJoin(sessions, and(eq(sessions.id, sessions.id), candidateModelConfigsWithTemperature.length > 0
+        .innerJoin(sessions, and(eq(sessions.id, sessions.id), eq(sessions.active, true), candidateModelConfigsWithTemperature.length > 0
         ? sql `${sessions.temperature} = CASE
 							${sql.join(candidateModelConfigsWithTemperature.map(candidate => sql `WHEN
 											${eq(candidateModelVersionAlias.providerModelCode, candidate.model)}
@@ -77,7 +80,7 @@ const getMissingEvaluations = async (db, testsConfig, { log = true } = {}) => {
         // we add the evaluation prompt version to the query
         .innerJoin(testToEvaluationInstructionsRels, eq(testToEvaluationInstructionsRels.testVersionId, sessions.testVersionId))
         .innerJoin(testEvaluationInstructionsVersions, and(eq(testEvaluationInstructionsVersions.id, testToEvaluationInstructionsRels.evaluationInstructionsVersionId), eq(testEvaluationInstructionsVersions.active, true)))
-        .leftJoin(sessionEvaluations, and(eq(sessionEvaluations.sessionId, sessions.id), eq(sessionEvaluations.modelVersionId, modelVersions.id), eq(sessionEvaluations.evaluationPromptVersionId, promptVersions.id), eq(sessionEvaluations.testEvaluationInstructionsVersionId, testEvaluationInstructionsVersions.id), modelConfigsWithTemperature.length > 0
+        .leftJoin(sessionEvaluations, and(eq(sessionEvaluations.sessionId, sessions.id), eq(sessionEvaluations.modelVersionId, modelVersions.id), eq(sessionEvaluations.evaluationPromptVersionId, promptVersions.id), eq(sessionEvaluations.testEvaluationInstructionsVersionId, testEvaluationInstructionsVersions.id), eq(sessionEvaluations.active, true), modelConfigsWithTemperature.length > 0
         ? sql `${sessionEvaluations.temperature} = CASE
 								${sql.join(modelConfigsWithTemperature.map(evaluator => sql `WHEN
 												${eq(modelVersions.providerModelCode, evaluator.model)}
@@ -129,11 +132,30 @@ const getMissingEvaluations = async (db, testsConfig, { log = true } = {}) => {
         // ordering by model id is important as Ollama and other local models have some initial load time to consider
         // and switching models regularly can be slow
         .orderBy(modelVersions.id, sessions.id, promptVersions.id);
+    const warnedModelReferences = new Set();
+    const requirements = {
+        input: ['text'],
+        output: ['structured'],
+    };
+    return missingEvaluations.filter(evaluation => {
+        const modelReference = `${evaluation.providerCode}:${evaluation.modelVersionCode}`;
+        const modelDefinition = registry.modelsByReference.get(modelReference);
+        if (log)
+            warnIfCapabilitiesUndeclared(modelDefinition, modelReference, warnedModelReferences);
+        const capabilityStatus = getModelCapabilityStatus(modelDefinition, requirements);
+        if (capabilityStatus && !capabilityStatus.supported) {
+            if (log) {
+                logCapabilitySkip('evaluation', modelReference, evaluation.sessionId, capabilityStatus.missing);
+            }
+            return false;
+        }
+        return true;
+    });
 };
 export const runAllEvaluationsWithDeps = async ({ db, testsConfig, registry, confirmRun, getProvider, wrapModel, generateText: generateTextFn, logModelError, envConfig, state, }) => {
     state.startRun();
     const { sessionEvaluations } = schema;
-    const missingEvaluations = await getMissingEvaluations(db, testsConfig);
+    const missingEvaluations = await getMissingEvaluations(db, testsConfig, registry, envConfig);
     const modelConfigsWithTemperature = testsConfig.evaluators.filter(evaluator => evaluator.temperature !== undefined);
     const modelsWithTemperatures = new Map(modelConfigsWithTemperature.map(({ provider, model, temperature }) => [`${provider}:${model}`, temperature]));
     // The total number of missing evaluations needs to account for the number of judgments
@@ -226,6 +248,8 @@ export const runAllEvaluationsWithDeps = async ({ db, testsConfig, registry, con
                 completionTokens,
                 promptTokens,
                 timeTaken: endTime - startTime,
+                finishReason: response.finishReason ?? null,
+                maxOutputTokens: envConfig.MAX_EVALUATION_OUTPUT_TOKENS,
             });
             console.log(`✅ Completed eval [${i} of ${totalMissingEvaluations}] with model ${evaluation.modelVersionCode} in ${
             // round to 2 decimal places
@@ -258,9 +282,14 @@ const createDefaultEvaluationRunnerDeps = async () => {
     };
 };
 export const countMissingEvaluations = async ({ testsConfig, } = {}) => {
-    const [{ resolveTestsConfig }, { db }] = await Promise.all([import('../config/index.js'), import('../database/db.js')]);
+    const [{ resolveTestsConfig, getFileBackedModelRegistry, envConfig }, { db }] = await Promise.all([
+        import('../config/index.js'),
+        import('../database/db.js'),
+    ]);
     const resolvedTestsConfig = testsConfig ?? resolveTestsConfig();
-    const missingEvaluations = await getMissingEvaluations(db, resolvedTestsConfig, { log: false });
+    const missingEvaluations = await getMissingEvaluations(db, resolvedTestsConfig, getFileBackedModelRegistry(), envConfig, {
+        log: false,
+    });
     return missingEvaluations.reduce((acc, evaluation) => acc + (resolvedTestsConfig.evaluationsPerEvaluator - evaluation.evaluationsCount), 0);
 };
 export const runAllEvaluations = async ({ confirmRun, testsConfig, registry } = {}) => runAllEvaluationsWithDeps({

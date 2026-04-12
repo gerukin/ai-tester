@@ -1,5 +1,5 @@
 import { sqliteView } from 'drizzle-orm/sqlite-core'
-import { eq, aliasedTable, desc, sql } from 'drizzle-orm'
+import { eq, aliasedTable, desc, sql, and } from 'drizzle-orm'
 
 import { modelVersions } from './models.js'
 import { testToTagRels, tags } from './tags.js'
@@ -56,7 +56,7 @@ export const evaluatedSessionsView = sqliteView('evaluated_sessions_view').as(qb
 		.innerJoin(testVersions, eq(sessions.testVersionId, testVersions.id))
 		.innerJoin(modelVersions, eq(sessions.modelVersionId, modelVersions.id))
 		.innerJoin(promptVersions, eq(sessions.candidateSysPromptVersionId, promptVersions.id))
-		.leftJoin(sessionEvaluations, eq(sessions.id, sessionEvaluations.sessionId))
+		.leftJoin(sessionEvaluations, and(eq(sessions.id, sessionEvaluations.sessionId), eq(sessionEvaluations.active, true)))
 		.leftJoin(evalPromptAlias, eq(sessionEvaluations.evaluationPromptVersionId, evalPromptAlias.id))
 		.leftJoin(
 			testEvaluationInstructionsVersions,
@@ -65,6 +65,8 @@ export const evaluatedSessionsView = sqliteView('evaluated_sessions_view').as(qb
 		.leftJoin(evalModelAlias, eq(sessionEvaluations.modelVersionId, evalModelAlias.id))
 		.innerJoin(testToTagRels, eq(testVersions.id, testToTagRels.testVersionId))
 		.innerJoin(tags, eq(testToTagRels.tagId, tags.id))
+
+		.where(eq(sessions.active, true))
 
 		.groupBy(sessions.id, sessionEvaluations.id)
 

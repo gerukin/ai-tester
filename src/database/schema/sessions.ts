@@ -58,6 +58,15 @@ export const sessions = sqliteTable(
 		/** The time taken to answer */
 		timeTaken: integer('time_taken').notNull(),
 
+		/** Whether this row is still active for reports and missing-work checks */
+		active: integer('active', { mode: 'boolean' }).notNull().default(true),
+
+		/** The unified reason why generation finished */
+		finishReason: text('finish_reason'),
+
+		/** The max output token limit used for this run */
+		maxOutputTokens: integer('max_output_tokens'),
+
 		/** Timestamp */
 		createdAt: integer('created_at', { mode: 'timestamp' })
 			.notNull()
@@ -153,6 +162,15 @@ export const sessionEvaluations = sqliteTable(
 
 		/** The time taken to answer */
 		timeTaken: integer('time_taken').notNull(),
+
+		/** Whether this row is still active for reports and missing-work checks */
+		active: integer('active', { mode: 'boolean' }).notNull().default(true),
+
+		/** The unified reason why generation finished */
+		finishReason: text('finish_reason'),
+
+		/** The max output token limit used for this run */
+		maxOutputTokens: integer('max_output_tokens'),
 
 		/** Timestamp */
 		createdAt: integer('created_at', { mode: 'timestamp' })

@@ -17,6 +17,14 @@ import { getSectionsFromMarkdownContent, sectionsToAiMessages, getReferencedFile
 import { ToolDefinition } from './tool-definition.js'
 import { getRequiredLanguageModelTokenUsage, getTrimmedReasoningText } from '../utils/ai-sdk.js'
 import type { FileBackedModelRegistry } from '../config/model-registry.js'
+import {
+	getModelCapabilityStatus,
+	getReferencedFileInputCapabilities,
+	logCapabilitySkip,
+	warnIfCapabilitiesUndeclared,
+	type CapabilityRequirements,
+} from './capabilities.js'
+import { refreshSessionTokenLimitState } from './token-limits.js'
 
 /**
  * Logs the number of skipped tests based on the current attempt and total attempts.
@@ -34,6 +42,7 @@ type SessionRunnerDeps = {
 	db: {
 		select: typeof import('../database/db.js').db.select
 		insert: typeof import('../database/db.js').db.insert
+		update: typeof import('../database/db.js').db.update
 	}
 	testsConfig: ReturnType<typeof import('../config/config-file.js').resolveTestsConfig>
 	registry: FileBackedModelRegistry
@@ -58,9 +67,13 @@ type RunAllTestsOptions = {
 const getMissingTests = async (
 	db: SessionRunnerDeps['db'],
 	testsConfig: SessionRunnerDeps['testsConfig'],
+	registry: FileBackedModelRegistry,
+	envConfig: Pick<SessionRunnerDeps['envConfig'], 'AI_TESTER_TESTS_DIR' | 'MAX_TEST_OUTPUT_TOKENS'>,
 	{ log = true }: { log?: boolean } = {}
 ) => {
 	if (log) console.log('Checking for tests to run...')
+
+	await refreshSessionTokenLimitState(db, envConfig.MAX_TEST_OUTPUT_TOKENS)
 
 	if (testsConfig.candidates.length === 0) {
 		console.log('⚠️ No active candidate models are configured.')
@@ -91,7 +104,7 @@ const getMissingTests = async (
 		candidate => candidate.prohibitedTags !== undefined && candidate.prohibitedTags.length > 0
 	)
 
-	return db
+	const missingTests = await db
 		.select({
 			modelVersionId: modelVersions.id,
 			modelVersionCode: modelVersions.providerModelCode,
@@ -151,6 +164,7 @@ const getMissingTests = async (
 				eq(sessions.testVersionId, testVersions.id),
 				eq(sessions.modelVersionId, modelVersions.id),
 				eq(sessions.candidateSysPromptVersionId, promptVersions.id),
+				eq(sessions.active, true),
 				modelConfigsWithTemperature.length > 0
 					? sql`${sessions.temperature} = CASE
 								${sql.join(
@@ -222,6 +236,32 @@ const getMissingTests = async (
 		// ordering by model id is important as Ollama and other local models have some initial load time to consider
 		// and switching models regularly can be slow
 		.orderBy(modelVersions.id, testVersions.id, promptVersions.id)
+
+	const warnedModelReferences = new Set<string>()
+	return missingTests.filter(test => {
+		const modelReference = `${test.providerCode}:${test.modelVersionCode}`
+		const modelDefinition = registry.modelsByReference.get(modelReference)
+		const files = getReferencedFiles(test.testContent, envConfig.AI_TESTER_TESTS_DIR)
+		const outputRequirements: CapabilityRequirements['output'] = test.structuredObjectSchema
+			? ['structured']
+			: test.toolVersionSchemas
+				? ['tools']
+				: ['text']
+		const requirements: CapabilityRequirements = {
+			input: ['text', ...getReferencedFileInputCapabilities(files)],
+			output: outputRequirements,
+		}
+
+		if (log) warnIfCapabilitiesUndeclared(modelDefinition, modelReference, warnedModelReferences)
+		const capabilityStatus = getModelCapabilityStatus(modelDefinition, requirements)
+		if (capabilityStatus && !capabilityStatus.supported) {
+			if (log) {
+				logCapabilitySkip('test', modelReference, test.testVersionId, capabilityStatus.missing)
+			}
+			return false
+		}
+		return true
+	})
 }
 
 export const runAllTestsWithDeps = async ({
@@ -239,7 +279,7 @@ export const runAllTestsWithDeps = async ({
 	state.startRun()
 
 	const { sessions } = schema
-	const missingTests = await getMissingTests(db, testsConfig)
+	const missingTests = await getMissingTests(db, testsConfig, registry, envConfig)
 	const modelConfigsWithTemperature = testsConfig.candidates.filter(candidate => candidate.temperature !== undefined)
 	const modelsWithTemperatures = new Map<string, number>(
 		modelConfigsWithTemperature.map(({ provider, model, temperature }) => [`${provider}:${model}`, temperature!])
@@ -383,6 +423,8 @@ export const runAllTestsWithDeps = async ({
 				cachedPromptTokensRead,
 				promptTokens,
 				timeTaken: endTime - startTime,
+				finishReason: response.finishReason ?? null,
+				maxOutputTokens: envConfig.MAX_TEST_OUTPUT_TOKENS,
 			})
 
 			console.log(
@@ -430,9 +472,12 @@ const createDefaultSessionRunnerDeps = async (): Promise<SessionRunnerDeps> => {
 }
 
 export const countMissingTests = async ({ testsConfig }: Pick<RunAllTestsOptions, 'testsConfig'> = {}) => {
-	const [{ resolveTestsConfig }, { db }] = await Promise.all([import('../config/index.js'), import('../database/db.js')])
+	const [{ resolveTestsConfig, getFileBackedModelRegistry, envConfig }, { db }] = await Promise.all([
+		import('../config/index.js'),
+		import('../database/db.js'),
+	])
 	const resolvedTestsConfig = testsConfig ?? resolveTestsConfig()
-	const missingTests = await getMissingTests(db, resolvedTestsConfig, { log: false })
+	const missingTests = await getMissingTests(db, resolvedTestsConfig, getFileBackedModelRegistry(), envConfig, { log: false })
 	return missingTests.reduce((acc, test) => acc + (resolvedTestsConfig.attempts - test.sessionsCount), 0)
 }
 

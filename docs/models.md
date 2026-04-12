@@ -51,6 +51,17 @@ providerModelCode: gemini-2.5-flash
 active: true
 thinking:
   includeThoughts: true
+capabilities:
+  input:
+    text: true
+    image: true
+    file: true
+    pdf: true
+  output:
+    text: true
+    structured: true
+    tools: true
+    reasoning: true
 candidateOverrides:
   thinking:
     budgetTokens: 5000
@@ -75,6 +86,7 @@ Fields:
 - `active`: Optional model-version switch. Defaults to `true`. Inactive model versions are excluded from runs and reports.
 - `providerOptions`: Optional provider-specific request fields to pass through for this model version.
 - `thinking`: Optional per-model thinking/reasoning settings. Use this for provider-agnostic options such as reasoning effort, thinking token budgets, or custom reasoning tag extraction when supported by the provider wrapper.
+- `capabilities`: Optional model capability declaration used to skip unsupported test/model pairs before provider calls. When omitted, runs preserve current behavior and print a warning. When present, omitted capability keys default to `false`.
 - `candidateOverrides`: Optional candidate-only runtime overrides. These merge on top of the base `providerOptions` and `thinking`.
 - `evaluatorOverrides`: Optional evaluator-only runtime overrides. These merge on top of the base `providerOptions` and `thinking`.
 - `costs`: Full cost history for this model version. This array is the source of truth.
@@ -89,6 +101,19 @@ Fields:
 - Ollama: `extractionTagName` and `enabled` for reasoning extraction
 
 When the same model needs different runtime options as a candidate versus an evaluator, put the shared settings in `providerOptions` / `thinking` and only the differences in `candidateOverrides` / `evaluatorOverrides`.
+
+Capability checks use these fields:
+
+- `input.text`: Required for normal text prompts and evaluation prompts.
+- `input.image`: Required when a test references an image file.
+- `input.file`: Required when a test references a non-image, non-PDF file.
+- `input.pdf`: Required when a test references a PDF.
+- `output.text`: Required for plain text candidate responses.
+- `output.structured`: Required for structured response schemas and evaluator judgments.
+- `output.tools`: Required when a test exposes tool schemas to the candidate.
+- `output.reasoning`: Informational only. It is not required for running tests or evaluations.
+
+If a declared model lacks a required capability for a specific test or evaluation, that pair is skipped before execution and no failed session/evaluation row is written.
 
 ## Activation rules
 
@@ -106,6 +131,12 @@ After syncing:
 ## Missing configured models
 
 If the main config references a provider/model pair that is not currently available from YAML, the app prints a warning at startup and skips that entry. This behaves the same as omitting that model from the config.
+
+## Token-limit reruns
+
+Sessions and evaluations store the generation finish reason and the max output token limit used for the run. When a row finished with `length` and a later run uses a higher max output token limit, the old row is marked inactive and the pair becomes eligible to run again. Reports and missing-work checks ignore inactive replacement rows.
+
+For rows created before finish reasons were stored, the runner conservatively backfills `finish_reason: length` when `completion_tokens` equals the current role max output token limit. This can rerun a coincidental exact-token result, but rerunning is safer than leaving a likely truncated answer as final.
 
 ## Cost history
 

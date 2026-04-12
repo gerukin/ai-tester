@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Model YAML files can now declare input/output capabilities, letting test and evaluation runs skip unsupported model/test pairs before provider calls.
+- Sessions and evaluations now persist finish reasons and max output token limits, allowing likely token-limit hits to be rerun when the configured max output token limit increases.
+
 ## [0.18.1] - 2026-04-11
 
 ### Changed

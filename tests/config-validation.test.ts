@@ -267,6 +267,63 @@ test('model registry rejects conflicting active variants for the same provider m
 	expectModuleFailure(env.runModule('modelRegistry:loadRegistry'), /Conflicting active model variants for openai:gpt-4o-mini/)
 })
 
+test('model registry loads capabilities and defaults missing capability keys to false', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	await env.write('data/providers/openai.yaml', ['code: openai', 'name: OpenAI', 'type: openai'].join('\n'))
+	await env.write(
+		'data/models/gpt-4o-mini.yaml',
+		[
+			'code: gpt-4o-mini',
+			'provider: openai',
+			'providerModelCode: gpt-4o-mini',
+			'capabilities:',
+			'  input:',
+			'    text: true',
+			'  output:',
+			'    text: true',
+			'    structured: true',
+		].join('\n')
+	)
+
+	const models = expectModuleSuccess(env.runModule('modelRegistry:loadModels')) as Array<{
+		capabilities?: {
+			input: { text: boolean; image: boolean; file: boolean; pdf: boolean }
+			output: { text: boolean; structured: boolean; tools: boolean; reasoning: boolean }
+		}
+	}>
+
+	assert.deepStrictEqual(models[0]?.capabilities, {
+		input: { text: true, image: false, file: false, pdf: false },
+		output: { text: true, structured: true, tools: false, reasoning: false },
+	})
+})
+
+test('model registry rejects invalid capability declarations', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	await env.write('data/providers/openai.yaml', ['code: openai', 'name: OpenAI', 'type: openai'].join('\n'))
+	await env.write(
+		'data/models/gpt-4o-mini.yaml',
+		[
+			'code: gpt-4o-mini',
+			'provider: openai',
+			'providerModelCode: gpt-4o-mini',
+			'capabilities:',
+			'  input:',
+			'    image: nope',
+		].join('\n')
+	)
+
+	expectModuleFailure(env.runModule('modelRegistry:loadModels'), /Expected boolean/)
+})
+
 test('currency registry validation reports missing model-cost and analysis-query currencies', async t => {
 	const env = await createSyncTestEnv()
 	t.after(async () => {

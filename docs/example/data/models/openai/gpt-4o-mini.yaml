@@ -3,6 +3,17 @@ provider: openai
 providerModelCode: gpt-4o-mini-2024-07-18
 thinking:
   effort: low
+capabilities:
+  input:
+    text: true
+    image: true
+    file: true
+    pdf: true
+  output:
+    text: true
+    structured: true
+    tools: true
+    reasoning: true
 providerOptions:
   serviceTier: auto
 costs:

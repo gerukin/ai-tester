@@ -55,7 +55,7 @@ export const showStats = async (query) => {
         timeTakenPerSession: sql `SUM(${sessions.timeTaken}) / COUNT(*)`.as('timeTaken'),
     })
         .from(sessions)
-        .innerJoin(sessionEvaluations, and(eq(sessionEvaluations.sessionId, sessions.id), evaluatorModelConfigsWithTemperature.length > 0
+        .innerJoin(sessionEvaluations, and(eq(sessionEvaluations.sessionId, sessions.id), eq(sessionEvaluations.active, true), evaluatorModelConfigsWithTemperature.length > 0
         ? sql `${sessionEvaluations.temperature} = CASE
 							${sql.join(evaluatorModelConfigsWithTemperature.map(evaluator => sql `WHEN
 											${eq(evaluatorModelVersionAlias.providerModelCode, evaluator.model)}
@@ -87,7 +87,7 @@ export const showStats = async (query) => {
         // We will need to filter by tags
         .innerJoin(testToTagRels, eq(testToTagRels.testVersionId, testVersions.id))
         .innerJoin(tags, eq(tags.id, testToTagRels.tagId))
-        .where(and(candidateModelConfigsWithTemperature.length > 0
+        .where(and(eq(sessions.active, true), candidateModelConfigsWithTemperature.length > 0
         ? sql `${sessions.temperature} = CASE
 							${sql.join(candidateModelConfigsWithTemperature.map(candidate => sql `WHEN
 											${eq(modelVersions.providerModelCode, candidate.model)}

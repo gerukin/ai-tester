@@ -127,6 +127,19 @@ test('showStats aggregates filtered sessions, evaluations, and converted costs',
 		promptTokens: 5,
 		completionTokens: 7,
 	})
+	const inactiveSession = await insertSession(env.db, {
+		testVersionId: shipTestVersion.id,
+		candidateSysPromptVersionId: candidatePromptVersion.id,
+		modelVersionId: candidateModelVersion.id,
+		answer: 'inactive session',
+		temperature: 0.3,
+		promptTokens: 5,
+		completionTokens: 7,
+	})
+	await env.db
+		.update(schema.sessions)
+		.set({ active: false })
+		.where(eq(schema.sessions.id, inactiveSession.id))
 
 	assert.ok(evaluationInstructionsVersion)
 	await env.db.insert(schema.sessionEvaluations).values([
@@ -141,6 +154,19 @@ test('showStats aggregates filtered sessions, evaluations, and converted costs',
 			completionTokens: 2,
 			promptTokens: 2,
 			timeTaken: 20,
+		},
+		{
+			sessionId: matchingSession.id,
+			evaluationPromptVersionId: evaluatorPromptVersion.id,
+			testEvaluationInstructionsVersionId: evaluationInstructionsVersion.id,
+			modelVersionId: evaluatorModelVersion.id,
+			temperature: 0.4,
+			pass: 0,
+			feedback: 'inactive replacement evaluation',
+			completionTokens: 2,
+			promptTokens: 2,
+			timeTaken: 20,
+			active: false,
 		},
 		{
 			sessionId: wrongTempSession.id,
@@ -166,7 +192,28 @@ test('showStats aggregates filtered sessions, evaluations, and converted costs',
 			promptTokens: 2,
 			timeTaken: 20,
 		},
+		{
+			sessionId: inactiveSession.id,
+			evaluationPromptVersionId: evaluatorPromptVersion.id,
+			testEvaluationInstructionsVersionId: evaluationInstructionsVersion.id,
+			modelVersionId: evaluatorModelVersion.id,
+			temperature: 0.4,
+			pass: 0,
+			feedback: 'inactive session evaluation',
+			completionTokens: 2,
+			promptTokens: 2,
+			timeTaken: 20,
+		},
 	])
+
+	const viewedRows = await env.client.execute({
+		sql: 'select session_id, feedback from evaluated_sessions_view where session_id in (?, ?)',
+		args: [matchingSession.id, inactiveSession.id],
+	})
+	assert.deepStrictEqual(
+		viewedRows.rows.map(row => row['feedback']),
+		['good']
+	)
 
 	const output = expectModuleSuccess(
 		env.runModule('stats:show', {

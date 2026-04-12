@@ -64,6 +64,13 @@
       "when": 1775867918853,
       "tag": "0008_clever_purifiers",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1775942400000,
+      "tag": "0009_enforce_model_capabilities",
+      "breakpoints": true
     }
   ]
 }

@@ -101,6 +101,7 @@ export const showStats = async (query: AnalysisQuery) => {
 				sessionEvaluations,
 				and(
 					eq(sessionEvaluations.sessionId, sessions.id),
+					eq(sessionEvaluations.active, true),
 					evaluatorModelConfigsWithTemperature.length > 0
 						? sql`${sessionEvaluations.temperature} = CASE
 							${sql.join(
@@ -166,6 +167,7 @@ export const showStats = async (query: AnalysisQuery) => {
 
 			.where(
 				and(
+					eq(sessions.active, true),
 					candidateModelConfigsWithTemperature.length > 0
 						? sql`${sessions.temperature} = CASE
 							${sql.join(

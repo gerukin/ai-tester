@@ -37,6 +37,22 @@ export const CostDefinitionSchema = z.object({
     currency: z.string().min(3).max(3).toUpperCase(),
     validFrom: z.string(),
 });
+const InputCapabilitiesSchema = z.object({
+    text: z.boolean().default(false),
+    image: z.boolean().default(false),
+    file: z.boolean().default(false),
+    pdf: z.boolean().default(false),
+});
+const OutputCapabilitiesSchema = z.object({
+    text: z.boolean().default(false),
+    structured: z.boolean().default(false),
+    tools: z.boolean().default(false),
+    reasoning: z.boolean().default(false),
+});
+const ModelCapabilitiesSchema = z.object({
+    input: InputCapabilitiesSchema.default({}),
+    output: OutputCapabilitiesSchema.default({}),
+});
 const JsonValueSchema = z.lazy(() => z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(JsonValueSchema), z.record(JsonValueSchema)]));
 const ThinkingConfigSchema = z
     .object({
@@ -64,6 +80,7 @@ export const ModelDefinitionSchema = z.object({
     active: z.boolean().default(true),
     providerOptions: z.record(JsonValueSchema).default({}),
     thinking: ThinkingConfigSchema,
+    capabilities: ModelCapabilitiesSchema.optional(),
     candidateOverrides: RuntimeOptionsOverrideSchema.optional(),
     evaluatorOverrides: RuntimeOptionsOverrideSchema.optional(),
     costs: z

@@ -1,6 +1,17 @@
 code: gpt-4o-mini
 provider: openai
 providerModelCode: gpt-4o-mini
+capabilities:
+  input:
+    text: true
+    image: true
+    file: true
+    pdf: true
+  output:
+    text: true
+    structured: true
+    tools: true
+    reasoning: true
 costs:
   - costPerCall: 0
     costPerPromptToken: 0.00000015
