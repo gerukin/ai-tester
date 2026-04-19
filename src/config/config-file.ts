@@ -16,8 +16,7 @@ export const RequiredTagsSchema = z.array(z.string()).default([])
 export const ProhibitedTagsSchema = z.array(z.string()).default(DEFAULT_PROHIBITED_TAGS)
 export const ConfiguredModelsSchema = z.array(
 	z.object({
-		provider: z.string(),
-		model: z.string(),
+		id: z.string().min(1),
 
 		/** Tags to include in this session for this model only (not provided means no restrictions) */
 		requiredTags: RequiredTagsSchema.optional(),
@@ -31,14 +30,13 @@ export const ConfiguredModelsSchema = z.array(
 ).superRefine((models, ctx) => {
 	const seen = new Set<string>()
 	for (const model of models) {
-		const key = `${model.provider}:${model.model}`
-		if (seen.has(key)) {
+		if (seen.has(model.id)) {
 			ctx.addIssue({
 				code: z.ZodIssueCode.custom,
-				message: `Duplicate configured model reference: ${key}`,
+				message: `Duplicate configured model reference: ${model.id}`,
 			})
 		}
-		seen.add(key)
+		seen.add(model.id)
 	}
 })
 export type ConfiguredModel = z.infer<typeof ConfiguredModelsSchema>[number]

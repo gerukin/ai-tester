@@ -1,3 +1,4 @@
+id: openai/gpt-4o/default
 code: gpt-4o
 provider: openai
 providerModelCode: gpt-4o

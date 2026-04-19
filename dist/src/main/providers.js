@@ -4,9 +4,8 @@ import { providers } from '../database/schema/providers.js';
 import { models, modelVersions } from '../database/schema/models.js';
 import { currencies, modelCosts } from '../database/schema/costs.js';
 import { sessionEvaluations, sessions } from '../database/schema/sessions.js';
-import { clearFileBackedModelRegistryCache, getModelRuntimeOptionsJson, loadFileBackedModelRegistry, } from '../config/model-registry.js';
+import { clearFileBackedModelRegistryCache, getModelRuntimeIdentityKeys, getModelRuntimeIdentities, loadFileBackedModelRegistry, } from '../config/model-registry.js';
 import { isCurrencyRegistryConfigured, validateCurrencyRegistryReferences } from '../config/currency-registry.js';
-const getModelIdentityKey = (model) => `${model.provider}:${model.providerModelCode}:${model.extraIdentifier ?? ''}:${getModelRuntimeOptionsJson(model)}`;
 const setActiveByIds = async (tx, table, ids) => {
     await tx.update(table).set({ active: false });
     if (ids.length > 0) {
@@ -151,9 +150,9 @@ const upsertModel = async (tx, modelConfig) => {
     }
     return model;
 };
-const upsertModelVersion = async (tx, providerId, modelId, modelConfig) => {
+const upsertModelVersion = async (tx, providerId, modelId, modelConfig, runtimeOptionsJson) => {
     let modelVersion = await tx.query.modelVersions.findFirst({
-        where: and(eq(modelVersions.providerId, providerId), eq(modelVersions.providerModelCode, modelConfig.providerModelCode), eq(modelVersions.runtimeOptionsJson, getModelRuntimeOptionsJson(modelConfig)), modelConfig.extraIdentifier
+        where: and(eq(modelVersions.providerId, providerId), eq(modelVersions.providerModelCode, modelConfig.providerModelCode), eq(modelVersions.runtimeOptionsJson, runtimeOptionsJson), modelConfig.extraIdentifier
             ? eq(modelVersions.extraIdentifier, modelConfig.extraIdentifier)
             : isNull(modelVersions.extraIdentifier)),
     });
@@ -175,7 +174,7 @@ const upsertModelVersion = async (tx, providerId, modelId, modelConfig) => {
             providerId,
             providerModelCode: modelConfig.providerModelCode,
             extraIdentifier: modelConfig.extraIdentifier,
-            runtimeOptionsJson: getModelRuntimeOptionsJson(modelConfig),
+            runtimeOptionsJson,
             active: true,
         })
             .returning();
@@ -205,17 +204,23 @@ const syncRegistryToDb = async (registry) => {
             }
         }
         const activeModelVersionIds = new Set();
-        const activeModelIdentityKeys = new Set(registry.activeModels.map(model => getModelIdentityKey(model)));
+        const syncedCostModelVersionIds = new Set();
+        const activeModelIdentityKeys = new Set(registry.activeModels.flatMap(model => getModelRuntimeIdentityKeys(model)));
         for (const modelConfig of registry.models) {
             const provider = providersByCode.get(modelConfig.provider);
             const model = modelsByCode.get(modelConfig.code);
             if (!provider || !model) {
                 throw new Error(`Failed to resolve registry entry ${modelConfig.provider}:${modelConfig.providerModelCode}`);
             }
-            const modelVersion = await upsertModelVersion(tx, provider.id, model.id, modelConfig);
-            if (activeModelIdentityKeys.has(getModelIdentityKey(modelConfig))) {
-                activeModelVersionIds.add(modelVersion.id);
-                await syncModelCostsFromYaml(tx, modelVersion.id, modelConfig);
+            for (const identity of getModelRuntimeIdentities(modelConfig)) {
+                const modelVersion = await upsertModelVersion(tx, provider.id, model.id, modelConfig, identity.runtimeOptionsJson);
+                if (activeModelIdentityKeys.has(identity.key)) {
+                    activeModelVersionIds.add(modelVersion.id);
+                    if (!syncedCostModelVersionIds.has(modelVersion.id)) {
+                        await syncModelCostsFromYaml(tx, modelVersion.id, modelConfig);
+                        syncedCostModelVersionIds.add(modelVersion.id);
+                    }
+                }
             }
         }
         await setActiveByIds(tx, providers, activeProviderIds);

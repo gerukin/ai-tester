@@ -9,6 +9,7 @@ import { sql } from 'drizzle-orm'
 
 import { schema } from '../../src/database/schema.js'
 import { EMPTY_MODEL_RUNTIME_OPTIONS_JSON } from '../../src/utils/json.js'
+import { getModelRuntimeIdentityKeys } from '../../src/config/model-registry.js'
 
 const repoRoot = process.cwd()
 const migrationsDir = path.join(repoRoot, 'migrations')
@@ -226,14 +227,29 @@ export const createSyncTestEnv = async () => {
 	}
 }
 
-export const createRegistry = (...models: Array<{ provider: string; providerModelCode: string; [key: string]: unknown }>) =>
-	({
+export const createRegistry = (
+	...models: Array<{ id?: string; provider: string; providerModelCode: string; [key: string]: unknown }>
+) => {
+	const modelsWithIds = models.map(model => ({
+		...model,
+		id: model.id ?? `${model.provider}/${model.providerModelCode}`,
+		providerOptions: model.providerOptions ?? {},
+		thinking: model.thinking,
+		candidateOverrides: model.candidateOverrides,
+		evaluatorOverrides: model.evaluatorOverrides,
+	}))
+
+	return {
 		providers: [],
 		providersByCode: new Map(),
-		models: models as never[],
-		activeModels: models as never[],
-		modelsByReference: new Map(models.map(model => [`${model.provider}:${model.providerModelCode}`, model])),
-	}) as const
+		models: modelsWithIds as never[],
+		activeModels: modelsWithIds as never[],
+		modelsById: new Map(modelsWithIds.map(model => [model.id, model])),
+		modelsByRuntimeIdentity: new Map(
+			modelsWithIds.flatMap(model => getModelRuntimeIdentityKeys(model).map(key => [key, model] as const))
+		),
+	} as const
+}
 
 export const insertProviderModel = async (
 	db: ReturnType<typeof drizzle>,

@@ -1,14 +1,17 @@
-import { and, or, eq, ne, inArray, sql, countDistinct, desc, aliasedTable } from 'drizzle-orm';
+import { and, or, eq, not, inArray, sql, countDistinct, desc, aliasedTable } from 'drizzle-orm';
 import { schema } from '../database/schema.js';
 import {} from '../config/index.js';
 import { db } from '../database/db.js';
 import { sessionEvaluations } from '../database/schema/sessions.js';
+import { getFileBackedModelRegistry } from '../config/model-registry.js';
+import { getConfiguredModelDefinition, getModelVersionLabel, modelVersionMatchesDefinition, } from './model-definition-filters.js';
 /** Locale to use for currency formatting, determined by the JS runtime */
 const LOCALE = navigator.language ?? 'en-US';
 /** Extra digits beyond what is considered the smallest fraction digits for a given currency */
 const EXTRA_FRACTION_DIGITS = 2;
 export const showStats = async (query) => {
     console.log('Checking for stats...');
+    const registry = getFileBackedModelRegistry();
     if (query.candidates && query.candidates.length === 0) {
         console.log(`⚠️ Query "${query.description}" has no active candidate models.`);
         return;
@@ -17,14 +20,22 @@ export const showStats = async (query) => {
         console.log(`⚠️ Query "${query.description}" has no active evaluator models.`);
         return;
     }
-    const candidateModelConfigsWithTemperature = query.candidates?.filter(candidate => candidate.temperature !== undefined) ?? [];
-    const modelConfigsWithTags = query.candidates?.filter(candidate => candidate.requiredTags !== undefined && candidate.requiredTags.length > 0) ??
+    const candidatesWithDefinitions = query.candidates?.map(candidate => ({
+        ...candidate,
+        modelDefinition: getConfiguredModelDefinition(registry, candidate),
+    }));
+    const evaluatorsWithDefinitions = query.evaluators?.map(evaluator => ({
+        ...evaluator,
+        modelDefinition: getConfiguredModelDefinition(registry, evaluator),
+    }));
+    const candidateModelConfigsWithTemperature = candidatesWithDefinitions?.filter(candidate => candidate.temperature !== undefined) ?? [];
+    const modelConfigsWithTags = candidatesWithDefinitions?.filter(candidate => candidate.requiredTags !== undefined && candidate.requiredTags.length > 0) ??
         [];
-    const modelConfigsWithProhibitedTags = query.candidates?.filter(candidate => candidate.prohibitedTags !== undefined && candidate.prohibitedTags.length > 0) ?? [];
-    const evaluatorModelConfigsWithTemperature = query.evaluators?.filter(evaluator => evaluator.temperature !== undefined) ?? [];
-    const evaluatorModelConfigsWithTags = query.evaluators?.filter(evaluator => evaluator.requiredTags !== undefined && evaluator.requiredTags.length > 0) ??
+    const modelConfigsWithProhibitedTags = candidatesWithDefinitions?.filter(candidate => candidate.prohibitedTags !== undefined && candidate.prohibitedTags.length > 0) ?? [];
+    const evaluatorModelConfigsWithTemperature = evaluatorsWithDefinitions?.filter(evaluator => evaluator.temperature !== undefined) ?? [];
+    const evaluatorModelConfigsWithTags = evaluatorsWithDefinitions?.filter(evaluator => evaluator.requiredTags !== undefined && evaluator.requiredTags.length > 0) ??
         [];
-    const evaluatorModelConfigsWithProhibitedTags = query.evaluators?.filter(evaluator => evaluator.prohibitedTags !== undefined && evaluator.prohibitedTags.length > 0) ?? [];
+    const evaluatorModelConfigsWithProhibitedTags = evaluatorsWithDefinitions?.filter(evaluator => evaluator.prohibitedTags !== undefined && evaluator.prohibitedTags.length > 0) ?? [];
     const systemPromptRefs = query.systemPrompts ?? [];
     // we query the DB to get all missing tests not yet run
     const { testVersions, testToTagRels, tags, sessions, models, modelVersions, providers, currencies, currencyRates, modelCosts, prompts, promptVersions, } = schema;
@@ -39,6 +50,8 @@ export const showStats = async (query) => {
         .select({
         testVersionId: testVersions.id,
         modelVersionCode: modelVersions.providerModelCode,
+        modelVersionExtraIdentifier: modelVersions.extraIdentifier,
+        modelVersionRuntimeOptionsJson: modelVersions.runtimeOptionsJson,
         providerCode: providers.code,
         // Drizzle-ORM doesn't auto-alias columns, and does not support aliasing columns manually, so we have to use the raw SQL
         // (but this makes it impossible to use the column in the group by clause of the outer query - which is why we ignore the TS error)
@@ -58,21 +71,20 @@ export const showStats = async (query) => {
         .innerJoin(sessionEvaluations, and(eq(sessionEvaluations.sessionId, sessions.id), eq(sessionEvaluations.active, true), evaluatorModelConfigsWithTemperature.length > 0
         ? sql `${sessionEvaluations.temperature} = CASE
 							${sql.join(evaluatorModelConfigsWithTemperature.map(evaluator => sql `WHEN
-											${eq(evaluatorModelVersionAlias.providerModelCode, evaluator.model)}
-											AND ${eq(evaluatorProviderAlias.code, evaluator.provider)}
+											${modelVersionMatchesDefinition(evaluatorProviderAlias, evaluatorModelVersionAlias, evaluator.modelDefinition, 'evaluator')}
 											THEN ${evaluator.temperature}`))}
 							ELSE ${query.evaluatorsTemperature ?? sessionEvaluations.temperature}
 						END`
         : eq(sessionEvaluations.temperature, query.evaluatorsTemperature ?? sessionEvaluations.temperature)))
-        .innerJoin(modelVersions, and(eq(sessions.modelVersionId, modelVersions.id), eq(modelVersions.active, true), ...(query.candidates
+        .innerJoin(modelVersions, and(eq(sessions.modelVersionId, modelVersions.id), eq(modelVersions.active, true), ...(candidatesWithDefinitions
         ? [
-            or(...query.candidates.map(({ provider, model }) => and(eq(providers.code, provider), eq(modelVersions.providerModelCode, model)))),
+            or(...candidatesWithDefinitions.map(candidate => modelVersionMatchesDefinition(providers, modelVersions, candidate.modelDefinition, 'candidate'))),
         ]
         : [])))
         .innerJoin(candidateModelAlias, and(eq(candidateModelAlias.id, modelVersions.modelId), eq(candidateModelAlias.active, true)))
-        .innerJoin(evaluatorModelVersionAlias, and(eq(sessionEvaluations.modelVersionId, evaluatorModelVersionAlias.id), eq(evaluatorModelVersionAlias.active, true), ...(query.evaluators
+        .innerJoin(evaluatorModelVersionAlias, and(eq(sessionEvaluations.modelVersionId, evaluatorModelVersionAlias.id), eq(evaluatorModelVersionAlias.active, true), ...(evaluatorsWithDefinitions
         ? [
-            or(...query.evaluators.map(({ provider, model }) => and(eq(evaluatorProviderAlias.code, provider), eq(evaluatorModelVersionAlias.providerModelCode, model)))),
+            or(...evaluatorsWithDefinitions.map(evaluator => modelVersionMatchesDefinition(evaluatorProviderAlias, evaluatorModelVersionAlias, evaluator.modelDefinition, 'evaluator'))),
         ]
         : [])))
         .innerJoin(providers, and(eq(providers.id, modelVersions.providerId), eq(providers.active, true)))
@@ -90,8 +102,7 @@ export const showStats = async (query) => {
         .where(and(eq(sessions.active, true), candidateModelConfigsWithTemperature.length > 0
         ? sql `${sessions.temperature} = CASE
 							${sql.join(candidateModelConfigsWithTemperature.map(candidate => sql `WHEN
-											${eq(modelVersions.providerModelCode, candidate.model)}
-											AND ${eq(providers.code, candidate.provider)}
+											${modelVersionMatchesDefinition(providers, modelVersions, candidate.modelDefinition, 'candidate')}
 											THEN ${candidate.temperature}`))}
 							ELSE ${query.candidatesTemperature ?? sessions.temperature}
 						END`
@@ -116,19 +127,19 @@ export const showStats = async (query) => {
             : []),
         // ensure we have all required tags for each candidate model
         ...(modelConfigsWithTags.length > 0
-            ? modelConfigsWithTags.map(candidate => sql `sum(CASE WHEN ${or(ne(modelVersions.providerModelCode, candidate.model), ne(providers.code, candidate.provider), inArray(tags.name, candidate.requiredTags))} THEN 1 ELSE 0 END) > 0`)
+            ? modelConfigsWithTags.map(candidate => sql `sum(CASE WHEN ${or(not(modelVersionMatchesDefinition(providers, modelVersions, candidate.modelDefinition, 'candidate')), inArray(tags.name, candidate.requiredTags))} THEN 1 ELSE 0 END) > 0`)
             : []),
         // ensure we don't have any prohibited tags for each candidate model
         ...(modelConfigsWithProhibitedTags.length > 0
-            ? modelConfigsWithProhibitedTags.map(candidate => sql `sum(CASE WHEN ${and(eq(modelVersions.providerModelCode, candidate.model), eq(providers.code, candidate.provider), inArray(tags.name, candidate.prohibitedTags))} THEN 1 ELSE 0 END) = 0`)
+            ? modelConfigsWithProhibitedTags.map(candidate => sql `sum(CASE WHEN ${and(modelVersionMatchesDefinition(providers, modelVersions, candidate.modelDefinition, 'candidate'), inArray(tags.name, candidate.prohibitedTags))} THEN 1 ELSE 0 END) = 0`)
             : []),
         // ensure we have all required tags for each evaluator model
         ...(evaluatorModelConfigsWithTags.length > 0
-            ? evaluatorModelConfigsWithTags.map(evaluator => sql `sum(CASE WHEN ${or(ne(evaluatorModelVersionAlias.providerModelCode, evaluator.model), ne(evaluatorProviderAlias.code, evaluator.provider), inArray(tags.name, evaluator.requiredTags))} THEN 1 ELSE 0 END) > 0`)
+            ? evaluatorModelConfigsWithTags.map(evaluator => sql `sum(CASE WHEN ${or(not(modelVersionMatchesDefinition(evaluatorProviderAlias, evaluatorModelVersionAlias, evaluator.modelDefinition, 'evaluator')), inArray(tags.name, evaluator.requiredTags))} THEN 1 ELSE 0 END) > 0`)
             : []),
         // ensure we don't have any prohibited tags for each evaluator model
         ...(evaluatorModelConfigsWithProhibitedTags.length > 0
-            ? evaluatorModelConfigsWithProhibitedTags.map(evaluator => sql `sum(CASE WHEN ${and(eq(evaluatorModelVersionAlias.providerModelCode, evaluator.model), eq(evaluatorProviderAlias.code, evaluator.provider), inArray(tags.name, evaluator.prohibitedTags))} THEN 1 ELSE 0 END) = 0`)
+            ? evaluatorModelConfigsWithProhibitedTags.map(evaluator => sql `sum(CASE WHEN ${and(modelVersionMatchesDefinition(evaluatorProviderAlias, evaluatorModelVersionAlias, evaluator.modelDefinition, 'evaluator'), inArray(tags.name, evaluator.prohibitedTags))} THEN 1 ELSE 0 END) = 0`)
             : []),
     ]))
         .orderBy(desc(sql `CAST(SUM(${sessionEvaluations.pass}) AS REAL) / COUNT(${sessionEvaluations.pass})`)));
@@ -182,6 +193,8 @@ export const showStats = async (query) => {
         testsCount: countDistinct(cte.testVersionId),
         evalsCount: sql `SUM(${cte.evalsCount})`,
         modelVersionCode: cte.modelVersionCode,
+        modelVersionExtraIdentifier: cte.modelVersionExtraIdentifier,
+        modelVersionRuntimeOptionsJson: cte.modelVersionRuntimeOptionsJson,
         providerCode: cte.providerCode,
         passRate: passRateQuery,
         costPerSession: costPerSessionQuery.as('costPerSession'),
@@ -209,7 +222,7 @@ export const showStats = async (query) => {
     });
     console.table(Object.fromEntries(stats.map(result => {
         return [
-            result.modelVersionCode,
+            getModelVersionLabel(registry, result),
             {
                 Provider: result.providerCode,
                 '✅%': Number((result.passRate * 100).toFixed(0)),

@@ -2,7 +2,7 @@
  * This module is responsible for running all test sessions that have not been run yet.
  */
 
-import { and, or, eq, ne, inArray, sql, lt, countDistinct } from 'drizzle-orm'
+import { and, or, eq, not, inArray, sql, lt, countDistinct } from 'drizzle-orm'
 import {
 	generateText,
 	jsonSchema,
@@ -25,6 +25,12 @@ import {
 	type CapabilityRequirements,
 } from './capabilities.js'
 import { refreshSessionTokenLimitState } from './token-limits.js'
+import {
+	getConfiguredModelDefinition,
+	getModelDefinitionForVersion,
+	getModelVersionLabel,
+	modelVersionMatchesDefinition,
+} from './model-definition-filters.js'
 
 /**
  * Logs the number of skipped tests based on the current attempt and total attempts.
@@ -96,11 +102,15 @@ const getMissingTests = async (
 		testToToolVersionRels,
 	} = schema
 
-	const modelConfigsWithTemperature = testsConfig.candidates.filter(candidate => candidate.temperature !== undefined)
-	const modelConfigsWithTags = testsConfig.candidates.filter(
+	const candidatesWithDefinitions = testsConfig.candidates.map(candidate => ({
+		...candidate,
+		modelDefinition: getConfiguredModelDefinition(registry, candidate),
+	}))
+	const modelConfigsWithTemperature = candidatesWithDefinitions.filter(candidate => candidate.temperature !== undefined)
+	const modelConfigsWithTags = candidatesWithDefinitions.filter(
 		candidate => candidate.requiredTags !== undefined && candidate.requiredTags.length > 0
 	)
-	const modelConfigsWithProhibitedTags = testsConfig.candidates.filter(
+	const modelConfigsWithProhibitedTags = candidatesWithDefinitions.filter(
 		candidate => candidate.prohibitedTags !== undefined && candidate.prohibitedTags.length > 0
 	)
 
@@ -108,6 +118,8 @@ const getMissingTests = async (
 		.select({
 			modelVersionId: modelVersions.id,
 			modelVersionCode: modelVersions.providerModelCode,
+			modelVersionExtraIdentifier: modelVersions.extraIdentifier,
+			modelVersionRuntimeOptionsJson: modelVersions.runtimeOptionsJson,
 			providerCode: providers.code,
 			testVersionId: testVersions.id,
 			testContent: testVersions.content,
@@ -134,11 +146,7 @@ const getMissingTests = async (
 			and(
 				eq(providers.id, modelVersions.providerId),
 				eq(providers.active, true),
-				or(
-					...testsConfig.candidates.map(({ provider, model }) =>
-						and(eq(providers.code, provider), eq(modelVersions.providerModelCode, model))
-					)
-				)
+				or(...candidatesWithDefinitions.map(candidate => modelVersionMatchesDefinition(providers, modelVersions, candidate.modelDefinition, 'candidate')))
 			)
 		)
 
@@ -168,14 +176,13 @@ const getMissingTests = async (
 				modelConfigsWithTemperature.length > 0
 					? sql`${sessions.temperature} = CASE
 								${sql.join(
-									modelConfigsWithTemperature.map(
-										candidate =>
-											sql`WHEN
-												${eq(modelVersions.providerModelCode, candidate.model)}
-												AND ${eq(providers.code, candidate.provider)}
+								modelConfigsWithTemperature.map(
+									candidate =>
+										sql`WHEN
+												${modelVersionMatchesDefinition(providers, modelVersions, candidate.modelDefinition, 'candidate')}
 												THEN ${candidate.temperature}`
-									)
-								)}
+								)
+							)}
 								ELSE ${testsConfig.candidatesTemperature}
 							END`
 					: eq(sessions.temperature, testsConfig.candidatesTemperature)
@@ -211,8 +218,7 @@ const getMissingTests = async (
 						? modelConfigsWithTags.map(
 								candidate =>
 									sql`sum(CASE WHEN ${or(
-										ne(modelVersions.providerModelCode, candidate.model),
-										ne(providers.code, candidate.provider),
+										not(modelVersionMatchesDefinition(providers, modelVersions, candidate.modelDefinition, 'candidate')),
 										inArray(tags.name, candidate.requiredTags!)
 									)} THEN 1 ELSE 0 END) > 0`
 						  )
@@ -223,8 +229,7 @@ const getMissingTests = async (
 						? modelConfigsWithProhibitedTags.map(
 								candidate =>
 									sql`sum(CASE WHEN ${and(
-										eq(modelVersions.providerModelCode, candidate.model),
-										eq(providers.code, candidate.provider),
+										modelVersionMatchesDefinition(providers, modelVersions, candidate.modelDefinition, 'candidate'),
 										inArray(tags.name, candidate.prohibitedTags!)
 									)} THEN 1 ELSE 0 END) = 0`
 						  )
@@ -239,8 +244,8 @@ const getMissingTests = async (
 
 	const warnedModelReferences = new Set<string>()
 	return missingTests.filter(test => {
-		const modelReference = `${test.providerCode}:${test.modelVersionCode}`
-		const modelDefinition = registry.modelsByReference.get(modelReference)
+		const modelReference = getModelVersionLabel(registry, test)
+		const modelDefinition = getModelDefinitionForVersion(registry, test)
 		const files = getReferencedFiles(test.testContent, envConfig.AI_TESTER_TESTS_DIR)
 		const outputRequirements: CapabilityRequirements['output'] = test.structuredObjectSchema
 			? ['structured']
@@ -282,7 +287,7 @@ export const runAllTestsWithDeps = async ({
 	const missingTests = await getMissingTests(db, testsConfig, registry, envConfig)
 	const modelConfigsWithTemperature = testsConfig.candidates.filter(candidate => candidate.temperature !== undefined)
 	const modelsWithTemperatures = new Map<string, number>(
-		modelConfigsWithTemperature.map(({ provider, model, temperature }) => [`${provider}:${model}`, temperature!])
+		modelConfigsWithTemperature.map(({ id, temperature }) => [id, temperature!])
 	)
 
 	// The total number of missing tests needs to account for the number of attempts
@@ -303,11 +308,10 @@ export const runAllTestsWithDeps = async ({
 	for (const test of missingTests) {
 		const provider = getProvider(test.providerCode)
 		if (!provider) throw new Error(`Provider ${test.providerCode} not found`)
-		const modelDefinition = registry.modelsByReference.get(`${test.providerCode}:${test.modelVersionCode}`)
+		const modelDefinition = getModelDefinitionForVersion(registry, test)
 		const model = wrapModel(provider(test.modelVersionCode), 'candidate', modelDefinition)
 
-		const temperature =
-			modelsWithTemperatures.get(`${test.providerCode}:${test.modelVersionCode}`) ?? testsConfig.candidatesTemperature
+		const temperature = (modelDefinition ? modelsWithTemperatures.get(modelDefinition.id) : undefined) ?? testsConfig.candidatesTemperature
 
 		// We extract the array of messages
 		const sections = getSectionsFromMarkdownContent(test.testContent)

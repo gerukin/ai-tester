@@ -1,3 +1,4 @@
+id: vertex_anthropic/claude-3-opus-20240229/default
 code: claude-3-opus
 provider: vertex_anthropic
 providerModelCode: claude-3-opus-20240229

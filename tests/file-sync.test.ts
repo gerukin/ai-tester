@@ -131,6 +131,172 @@ test('provider and currency sync bootstraps empty DB and creates a new active mo
 	assert.deepStrictEqual(activeCosts, [{ currencyCode: 'JPY', costPerPromptToken: 0.3 }])
 })
 
+test('provider sync allows multiple active model definitions for the same provider model when unique properties differ', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	await env.write('data/providers/openai.yaml', ['code: openai', 'name: OpenAI', 'type: openai'].join('\n'))
+	await env.write(
+		'data/currencies/USD.yaml',
+		['code: USD', 'rates:', '  - rateInUSD: 1', '    validFrom: 2025-01-01'].join('\n')
+	)
+	await env.write(
+		'data/models/gpt-4o-mini-low.yaml',
+		[
+			'id: openai/gpt-4o-mini/reasoning-low',
+			'code: gpt-4o-mini',
+			'provider: openai',
+			'providerModelCode: gpt-4o-mini',
+			'uniqueProperties:',
+			'  - thinking.effort',
+			'thinking:',
+			'  effort: low',
+			'costs:',
+			'  - costPerCall: 0',
+			'    costPerPromptToken: 0.1',
+			'    costPerCompletionToken: 0.2',
+			'    costPerHour: 0',
+			'    currency: USD',
+			'    validFrom: 2025-01-01',
+		].join('\n')
+	)
+	await env.write(
+		'data/models/gpt-4o-mini-high.yaml',
+		[
+			'id: openai/gpt-4o-mini/reasoning-high',
+			'code: gpt-4o-mini',
+			'provider: openai',
+			'providerModelCode: gpt-4o-mini',
+			'uniqueProperties:',
+			'  - thinking.effort',
+			'thinking:',
+			'  effort: high',
+			'costs:',
+			'  - costPerCall: 0',
+			'    costPerPromptToken: 0.1',
+			'    costPerCompletionToken: 0.2',
+			'    costPerHour: 0',
+			'    currency: USD',
+			'    validFrom: 2025-01-01',
+		].join('\n')
+	)
+
+	expectSyncSuccess(env.runSync(['currencies', 'providers']))
+
+	const models = await env.db.select().from(schema.models)
+	const modelVersions = await env.db.select().from(schema.modelVersions)
+	assert.strictEqual(models.length, 1)
+	assert.strictEqual(modelVersions.length, 2)
+	assert.strictEqual(modelVersions.filter(version => version.active).length, 2)
+	assert.ok(modelVersions.some(version => version.runtimeOptionsJson.includes('"effort":"low"')))
+	assert.ok(modelVersions.some(version => version.runtimeOptionsJson.includes('"effort":"high"')))
+})
+
+test('provider sync does not create a new model version when only a YAML id is added', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	const modelWithoutId = [
+		'code: gpt-4o-mini',
+		'provider: openai',
+		'providerModelCode: gpt-4o-mini',
+		'providerOptions:',
+		'  seed: 1',
+		'costs:',
+		'  - costPerCall: 0',
+		'    costPerPromptToken: 0.1',
+		'    costPerCompletionToken: 0.2',
+		'    costPerHour: 0',
+		'    currency: USD',
+		'    validFrom: 2025-01-01',
+	].join('\n')
+
+	await env.write('data/providers/openai.yaml', ['code: openai', 'name: OpenAI', 'type: openai'].join('\n'))
+	await env.write(
+		'data/currencies/USD.yaml',
+		['code: USD', 'rates:', '  - rateInUSD: 1', '    validFrom: 2025-01-01'].join('\n')
+	)
+	await env.write('data/models/gpt-4o-mini.yaml', modelWithoutId)
+
+	expectSyncSuccess(env.runSync(['currencies', 'providers']))
+
+	const [firstVersion] = await env.db.select().from(schema.modelVersions)
+	assert.ok(firstVersion)
+
+	await env.write('data/models/gpt-4o-mini.yaml', ['id: openai/gpt-4o-mini/default', modelWithoutId].join('\n'))
+
+	expectSyncSuccess(env.runSync(['currencies', 'providers']))
+
+	const modelVersions = await env.db.select().from(schema.modelVersions)
+	assert.strictEqual(modelVersions.length, 1)
+	assert.strictEqual(modelVersions[0]?.id, firstVersion!.id)
+	assert.strictEqual(modelVersions[0]?.active, true)
+})
+
+test('provider sync keeps role-specific model versions tied to effective runtime options', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	const writeModel = async (evaluatorLane: string) => {
+		await env.write(
+			'data/models/gpt-4o-mini.yaml',
+			[
+				'id: openai/gpt-4o-mini/role-overrides',
+				'code: gpt-4o-mini',
+				'provider: openai',
+				'providerModelCode: gpt-4o-mini',
+				'candidateOverrides:',
+				'  providerOptions:',
+				'    user: candidate',
+				'evaluatorOverrides:',
+				'  providerOptions:',
+				`    lane: ${evaluatorLane}`,
+				'costs:',
+				'  - costPerCall: 0',
+				'    costPerPromptToken: 0.1',
+				'    costPerCompletionToken: 0.2',
+				'    costPerHour: 0',
+				'    currency: USD',
+				'    validFrom: 2025-01-01',
+			].join('\n')
+		)
+	}
+
+	await env.write('data/providers/openai.yaml', ['code: openai', 'name: OpenAI', 'type: openai'].join('\n'))
+	await env.write(
+		'data/currencies/USD.yaml',
+		['code: USD', 'rates:', '  - rateInUSD: 1', '    validFrom: 2025-01-01'].join('\n')
+	)
+	await writeModel('eval-a')
+
+	expectSyncSuccess(env.runSync(['currencies', 'providers']))
+
+	const modelVersionsAfterFirstSync = await env.db.select().from(schema.modelVersions)
+	assert.strictEqual(modelVersionsAfterFirstSync.length, 2)
+	assert.strictEqual(modelVersionsAfterFirstSync.filter(version => version.active).length, 2)
+	const candidateVersion = modelVersionsAfterFirstSync.find(version => version.runtimeOptionsJson.includes('"user":"candidate"'))
+	const firstEvaluatorVersion = modelVersionsAfterFirstSync.find(version => version.runtimeOptionsJson.includes('"lane":"eval-a"'))
+	assert.ok(candidateVersion)
+	assert.ok(firstEvaluatorVersion)
+
+	await writeModel('eval-b')
+	expectSyncSuccess(env.runSync(['providers']))
+
+	const modelVersionsAfterSecondSync = await env.db.select().from(schema.modelVersions)
+	assert.strictEqual(modelVersionsAfterSecondSync.length, 3)
+	const activeVersions = modelVersionsAfterSecondSync.filter(version => version.active)
+	assert.strictEqual(activeVersions.length, 2)
+	assert.strictEqual(activeVersions.find(version => version.runtimeOptionsJson.includes('"user":"candidate"'))?.id, candidateVersion.id)
+	assert.strictEqual(modelVersionsAfterSecondSync.find(version => version.id === firstEvaluatorVersion.id)?.active, false)
+	assert.ok(activeVersions.some(version => version.runtimeOptionsJson.includes('"lane":"eval-b"')))
+})
+
 test('provider sync deactivates registry rows when files are removed', async t => {
 	const env = await createSyncTestEnv()
 	t.after(async () => {
@@ -341,7 +507,7 @@ test('currency sync updates and cleans up existing rate rows as YAML changes', a
 	assert.strictEqual(jpyRates.length, 0)
 })
 
-test('provider sync rejects conflicting active model variants for the same provider/model code', async t => {
+test('provider sync rejects active model variants without declared unique properties', async t => {
 	const env = await createSyncTestEnv()
 	t.after(async () => {
 		await env.cleanup()
@@ -351,6 +517,7 @@ test('provider sync rejects conflicting active model variants for the same provi
 	await env.write(
 		'data/models/variant-a.yaml',
 		[
+			'id: openai/gpt-4o-mini-2024-07-18/a',
 			'code: gpt-4o-mini-a',
 			'provider: openai',
 			'providerModelCode: gpt-4o-mini-2024-07-18',
@@ -367,6 +534,7 @@ test('provider sync rejects conflicting active model variants for the same provi
 	await env.write(
 		'data/models/variant-b.yaml',
 		[
+			'id: openai/gpt-4o-mini-2024-07-18/b',
 			'code: gpt-4o-mini-b',
 			'provider: openai',
 			'providerModelCode: gpt-4o-mini-2024-07-18',
@@ -385,7 +553,7 @@ test('provider sync rejects conflicting active model variants for the same provi
 		['code: USD', 'rates:', '  - rateInUSD: 1', '    validFrom: 2025-01-01'].join('\n')
 	)
 
-	expectSyncFailure(env.runSync(['currencies', 'providers']), /Conflicting active model variants/)
+	expectSyncFailure(env.runSync(['currencies', 'providers']), /must declare uniqueProperties/)
 })
 
 test('prompt sync creates versions from replacements and updates active tags on resync', async t => {

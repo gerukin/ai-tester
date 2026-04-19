@@ -1,3 +1,4 @@
+id: openai/gpt-4o-mini/default
 code: gpt-4o-mini
 provider: openai
 providerModelCode: gpt-4o-mini

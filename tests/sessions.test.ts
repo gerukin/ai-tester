@@ -16,13 +16,13 @@ import {
 } from './helpers/test-harness.js'
 
 const baseTestsConfig = (provider: string, model: string) => ({
-	candidates: [{ provider, model }],
+	candidates: [{ id: `${provider}/${model}` }],
 	candidatesTemperature: 0.3,
 	attempts: 1,
 	requiredTags1: [] as string[],
 	requiredTags2: [] as string[],
 	prohibitedTags: [] as string[],
-	evaluators: [] as Array<{ provider: string; model: string }>,
+	evaluators: [] as Array<{ id: string }>,
 	evaluatorsTemperature: 0.4,
 	evaluationsPerEvaluator: 1,
 	analysisQueries: undefined,

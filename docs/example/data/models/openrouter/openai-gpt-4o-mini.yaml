@@ -1,3 +1,4 @@
+id: openrouter/openai-gpt-4o-mini/default
 code: gpt-4o-mini-openrouter
 provider: openrouter
 providerModelCode: openai/gpt-4o-mini
