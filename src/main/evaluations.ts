@@ -2,7 +2,7 @@
  * This module is responsible for running all session evaluations that have not been run yet.
  */
 
-import { and, or, eq, ne, inArray, sql, lt, countDistinct, aliasedTable } from 'drizzle-orm'
+import { and, or, eq, not, inArray, sql, lt, countDistinct, aliasedTable } from 'drizzle-orm'
 import { generateText, Output } from 'ai'
 import z from 'zod'
 
@@ -17,6 +17,12 @@ import {
 	type CapabilityRequirements,
 } from './capabilities.js'
 import { refreshEvaluationTokenLimitState } from './token-limits.js'
+import {
+	getConfiguredModelDefinition,
+	getModelDefinitionForVersion,
+	getModelVersionLabel,
+	modelVersionMatchesDefinition,
+} from './model-definition-filters.js'
 
 const evalSchema = z.object({
 	// Note: `.nullable()` is not supported by some providers (like Vertex AI) as it generates an unsupported `anyOf` schema
@@ -97,21 +103,30 @@ const getMissingEvaluations = async (
 		sessionEvaluations,
 	} = schema
 
-	const modelConfigsWithTemperature = testsConfig.evaluators.filter(evaluator => evaluator.temperature !== undefined)
-	const modelConfigsWithTags = testsConfig.evaluators.filter(
+	const evaluatorsWithDefinitions = testsConfig.evaluators.map(evaluator => ({
+		...evaluator,
+		modelDefinition: getConfiguredModelDefinition(registry, evaluator),
+	}))
+	const candidatesWithDefinitions = testsConfig.candidates.map(candidate => ({
+		...candidate,
+		modelDefinition: getConfiguredModelDefinition(registry, candidate),
+	}))
+
+	const modelConfigsWithTemperature = evaluatorsWithDefinitions.filter(evaluator => evaluator.temperature !== undefined)
+	const modelConfigsWithTags = evaluatorsWithDefinitions.filter(
 		candidate => candidate.requiredTags !== undefined && candidate.requiredTags.length > 0
 	)
-	const modelConfigsWithProhibitedTags = testsConfig.evaluators.filter(
+	const modelConfigsWithProhibitedTags = evaluatorsWithDefinitions.filter(
 		candidate => candidate.prohibitedTags !== undefined && candidate.prohibitedTags.length > 0
 	)
 
-	const candidateModelConfigsWithTemperature = testsConfig.candidates.filter(
+	const candidateModelConfigsWithTemperature = candidatesWithDefinitions.filter(
 		candidate => candidate.temperature !== undefined
 	)
-	const candidateModelConfigsWithTags = testsConfig.candidates.filter(
+	const candidateModelConfigsWithTags = candidatesWithDefinitions.filter(
 		candidate => candidate.requiredTags !== undefined && candidate.requiredTags.length > 0
 	)
-	const candidateModelConfigsWithProhibitedTags = testsConfig.candidates.filter(
+	const candidateModelConfigsWithProhibitedTags = candidatesWithDefinitions.filter(
 		candidate => candidate.prohibitedTags !== undefined && candidate.prohibitedTags.length > 0
 	)
 	const candidateModelVersionAlias = aliasedTable(modelVersions, 'candidate_model_version_alias')
@@ -124,6 +139,8 @@ const getMissingEvaluations = async (
 		.select({
 			modelVersionId: modelVersions.id,
 			modelVersionCode: modelVersions.providerModelCode,
+			modelVersionExtraIdentifier: modelVersions.extraIdentifier,
+			modelVersionRuntimeOptionsJson: modelVersions.runtimeOptionsJson,
 			providerCode: providers.code,
 			testVersionId: testVersions.id,
 			testContent: testVersions.content,
@@ -145,11 +162,7 @@ const getMissingEvaluations = async (
 			and(
 				eq(providers.id, modelVersions.providerId),
 				eq(providers.active, true),
-				or(
-					...testsConfig.evaluators.map(({ provider, model }) =>
-						and(eq(providers.code, provider), eq(modelVersions.providerModelCode, model))
-					)
-				)
+				or(...evaluatorsWithDefinitions.map(evaluator => modelVersionMatchesDefinition(providers, modelVersions, evaluator.modelDefinition, 'evaluator')))
 			)
 		)
 
@@ -165,8 +178,7 @@ const getMissingEvaluations = async (
 								candidateModelConfigsWithTemperature.map(
 									candidate =>
 										sql`WHEN
-											${eq(candidateModelVersionAlias.providerModelCode, candidate.model)}
-											AND ${eq(candidateProviderAlias.code, candidate.provider)}
+											${modelVersionMatchesDefinition(candidateProviderAlias, candidateModelVersionAlias, candidate.modelDefinition, 'candidate')}
 											THEN ${candidate.temperature}`
 								)
 							)}
@@ -187,8 +199,8 @@ const getMissingEvaluations = async (
 				eq(candidateProviderAlias.id, candidateModelVersionAlias.providerId),
 				eq(candidateProviderAlias.active, true),
 				or(
-					...testsConfig.candidates.map(({ provider, model }) =>
-						and(eq(candidateProviderAlias.code, provider), eq(candidateModelVersionAlias.providerModelCode, model))
+					...candidatesWithDefinitions.map(candidate =>
+						modelVersionMatchesDefinition(candidateProviderAlias, candidateModelVersionAlias, candidate.modelDefinition, 'candidate')
 					)
 				)
 			)
@@ -221,14 +233,13 @@ const getMissingEvaluations = async (
 				modelConfigsWithTemperature.length > 0
 					? sql`${sessionEvaluations.temperature} = CASE
 								${sql.join(
-									modelConfigsWithTemperature.map(
-										evaluator =>
-											sql`WHEN
-												${eq(modelVersions.providerModelCode, evaluator.model)}
-												AND ${eq(providers.code, evaluator.provider)}
+								modelConfigsWithTemperature.map(
+									evaluator =>
+										sql`WHEN
+												${modelVersionMatchesDefinition(providers, modelVersions, evaluator.modelDefinition, 'evaluator')}
 												THEN ${evaluator.temperature}`
-									)
-								)}
+								)
+							)}
 								ELSE ${testsConfig.evaluatorsTemperature}
 							END`
 					: eq(sessionEvaluations.temperature, testsConfig.evaluatorsTemperature)
@@ -271,8 +282,7 @@ const getMissingEvaluations = async (
 						? modelConfigsWithTags.map(
 								evaluator =>
 									sql`sum(CASE WHEN ${or(
-										ne(modelVersions.providerModelCode, evaluator.model),
-										ne(providers.code, evaluator.provider),
+										not(modelVersionMatchesDefinition(providers, modelVersions, evaluator.modelDefinition, 'evaluator')),
 										inArray(tags.name, evaluator.requiredTags!)
 									)} THEN 1 ELSE 0 END) > 0`
 						  )
@@ -283,8 +293,7 @@ const getMissingEvaluations = async (
 						? modelConfigsWithProhibitedTags.map(
 								evaluator =>
 									sql`sum(CASE WHEN ${and(
-										eq(modelVersions.providerModelCode, evaluator.model),
-										eq(providers.code, evaluator.provider),
+										modelVersionMatchesDefinition(providers, modelVersions, evaluator.modelDefinition, 'evaluator'),
 										inArray(tags.name, evaluator.prohibitedTags!)
 									)} THEN 1 ELSE 0 END) = 0`
 						  )
@@ -295,8 +304,7 @@ const getMissingEvaluations = async (
 						? candidateModelConfigsWithTags.map(
 								candidate =>
 									sql`sum(CASE WHEN ${or(
-										ne(candidateModelVersionAlias.providerModelCode, candidate.model),
-										ne(candidateProviderAlias.code, candidate.provider),
+										not(modelVersionMatchesDefinition(candidateProviderAlias, candidateModelVersionAlias, candidate.modelDefinition, 'candidate')),
 										inArray(tags.name, candidate.requiredTags!)
 									)} THEN 1 ELSE 0 END) > 0`
 						  )
@@ -307,8 +315,7 @@ const getMissingEvaluations = async (
 						? candidateModelConfigsWithProhibitedTags.map(
 								candidate =>
 									sql`sum(CASE WHEN ${and(
-										eq(candidateModelVersionAlias.providerModelCode, candidate.model),
-										eq(candidateProviderAlias.code, candidate.provider),
+										modelVersionMatchesDefinition(candidateProviderAlias, candidateModelVersionAlias, candidate.modelDefinition, 'candidate'),
 										inArray(tags.name, candidate.prohibitedTags!)
 									)} THEN 1 ELSE 0 END) = 0`
 						  )
@@ -327,8 +334,8 @@ const getMissingEvaluations = async (
 		output: ['structured'],
 	}
 	return missingEvaluations.filter(evaluation => {
-		const modelReference = `${evaluation.providerCode}:${evaluation.modelVersionCode}`
-		const modelDefinition = registry.modelsByReference.get(modelReference)
+		const modelReference = getModelVersionLabel(registry, evaluation)
+		const modelDefinition = getModelDefinitionForVersion(registry, evaluation)
 		if (log) warnIfCapabilitiesUndeclared(modelDefinition, modelReference, warnedModelReferences)
 		const capabilityStatus = getModelCapabilityStatus(modelDefinition, requirements)
 		if (capabilityStatus && !capabilityStatus.supported) {
@@ -359,7 +366,7 @@ export const runAllEvaluationsWithDeps = async ({
 	const missingEvaluations = await getMissingEvaluations(db, testsConfig, registry, envConfig)
 	const modelConfigsWithTemperature = testsConfig.evaluators.filter(evaluator => evaluator.temperature !== undefined)
 	const modelsWithTemperatures = new Map<string, number>(
-		modelConfigsWithTemperature.map(({ provider, model, temperature }) => [`${provider}:${model}`, temperature!])
+		modelConfigsWithTemperature.map(({ id, temperature }) => [id, temperature!])
 	)
 
 	// The total number of missing evaluations needs to account for the number of judgments
@@ -383,12 +390,11 @@ export const runAllEvaluationsWithDeps = async ({
 	for (const evaluation of missingEvaluations) {
 		const provider = getProvider(evaluation.providerCode)
 		if (!provider) throw new Error(`Provider ${evaluation.providerCode} not found`)
-		const modelDefinition = registry.modelsByReference.get(`${evaluation.providerCode}:${evaluation.modelVersionCode}`)
+		const modelDefinition = getModelDefinitionForVersion(registry, evaluation)
 		const model = wrapModel(provider(evaluation.modelVersionCode), 'evaluator', modelDefinition)
 
 		const temperature =
-			modelsWithTemperatures.get(`${evaluation.providerCode}:${evaluation.modelVersionCode}`) ??
-			testsConfig.evaluatorsTemperature
+			(modelDefinition ? modelsWithTemperatures.get(modelDefinition.id) : undefined) ?? testsConfig.evaluatorsTemperature
 
 		// We extract the array of messages
 		const sections = getSectionsFromMarkdownContent(evaluation.evalPromptContent)

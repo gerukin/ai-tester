@@ -61,7 +61,9 @@ const operationMap = {
 			providers: registry.providers,
 			models: registry.models,
 			activeModels: registry.activeModels,
-			modelReferences: Array.from(registry.modelsByReference.keys()),
+			modelReferences: Array.from(
+				new Set(registry.activeModels.map(model => `${model.provider}:${model.providerModelCode}`))
+			),
 		}
 	},
 	'currencyRegistry:loadDefinitions': async () => (await import('../../src/config/currency-registry.js')).loadCurrencyDefinitions(),

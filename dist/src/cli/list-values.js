@@ -16,7 +16,7 @@ const sortUnique = (values) => Array.from(new Set(values)).sort((a, b) => a.loca
 const readMarkdownFrontMatter = (filePath) => extractFrontMatterAndTemplate(fs.readFileSync(filePath, 'utf-8')).templateConfig;
 const formatSection = (title, values, emptyMessage) => [`${title}:`, ...(values.length > 0 ? values.map(value => `  ${value}`) : [`  ${emptyMessage}`])].join('\n');
 export const listAvailableModels = () => getFileBackedModelRegistry()
-    .activeModels.map(model => JSON.stringify({ provider: model.provider, model: model.providerModelCode }))
+    .activeModels.map(model => JSON.stringify({ id: model.id }))
     .sort((a, b) => a.localeCompare(b));
 export const listAvailableTags = () => sortUnique(listAllMdFiles(envConfig.AI_TESTER_TESTS_DIR).flatMap(file => TestListConfigSchema.parse(readMarkdownFrontMatter(file)).tags ?? []));
 export const listAvailablePromptCodes = () => sortUnique(listAllMdFiles(envConfig.AI_TESTER_PROMPTS_DIR).flatMap(file => {

@@ -2,14 +2,13 @@
 
 Providers and model versions are defined from YAML files and then synchronized into the database.
 
-The main test config still references models with:
+The main test config references model definitions by `id`:
 
 ```yaml
-provider: openai
-model: gpt-4o-mini-2024-07-18
+id: openai/gpt-4o-mini-2024-07-18/reasoning-low
 ```
 
-The `model` value above is the `providerModelCode` from the model YAML file.
+Use an id that remains stable for the configured model definition. The recommended format is `{provider}/{providerModelCode}/{suffix}`.
 
 ## Provider files
 
@@ -50,6 +49,7 @@ Create one YAML file per runnable provider model under `AI_TESTER_MODELS_DIR`.
 Example:
 
 ```yaml
+id: vertex/gemini-2.5-flash/default
 code: gemini-2.5-flash
 provider: vertex
 providerModelCode: gemini-2.5-flash
@@ -84,11 +84,13 @@ costs:
 
 Fields:
 
+- `id`: The public model-definition id used by config files. If omitted, it defaults to `{provider}/{providerModelCode}` for migration compatibility. Add an explicit suffix when defining variants of the same provider model.
 - `code`: The internal shared model code used for grouping and analysis.
 - `provider`: The provider code from the provider YAML file.
 - `providerModelCode`: The provider-facing runtime model identifier.
 - `extraIdentifier`: Optional provider-specific identifier.
 - `active`: Optional model-version switch. Defaults to `true`. Inactive model versions are excluded from runs and reports.
+- `uniqueProperties`: Optional list of versioned runtime property paths that explain what makes this definition unique among active variants of the same provider model.
 - `providerOptions`: Optional provider-specific request fields to pass through for this model version.
 - `thinking`: Optional per-model thinking/reasoning settings. Use this for provider-agnostic options such as reasoning effort, thinking token budgets, or custom reasoning tag extraction when supported by the provider wrapper.
 - `capabilities`: Optional model capability declaration used to skip unsupported test/model pairs before provider calls. When omitted, runs preserve current behavior and print a warning. When present, omitted capability keys default to `false`.
@@ -106,6 +108,21 @@ Fields:
 - Ollama: `extractionTagName` and `enabled` for reasoning extraction
 
 When the same model needs different runtime options as a candidate versus an evaluator, put the shared settings in `providerOptions` / `thinking` and only the differences in `candidateOverrides` / `evaluatorOverrides`.
+
+When multiple active YAML files share the same `provider` and `providerModelCode`, each variant must have a distinct `id` and declare `uniqueProperties` whose values distinguish the variants. Unique properties must refer to versioned runtime settings such as `extraIdentifier`, `providerOptions`, `thinking`, `candidateOverrides`, or `evaluatorOverrides`.
+
+Example:
+
+```yaml
+id: openai/gpt-4o-mini/reasoning-high
+code: gpt-4o-mini
+provider: openai
+providerModelCode: gpt-4o-mini
+uniqueProperties:
+  - thinking.effort
+thinking:
+  effort: high
+```
 
 Capability checks use these fields:
 
@@ -129,13 +146,13 @@ After syncing:
 - historical sessions and evaluations remain in the database
 - if a YAML file is restored later, the matching row becomes active again
 - changing `providerOptions`, `thinking`, `candidateOverrides`, or `evaluatorOverrides` creates a new `model_versions` row in the database for that provider model identity
-- for multiple YAML entries sharing the same provider and `providerModelCode`, at most one may have `active: true`
-- if more than one active variant exists for the same provider/model code, startup fails and you must set `active: false` on the older variants
+- adding an `id` to an existing model YAML file does not create a new `model_versions` row by itself
+- multiple YAML entries may share the same provider and `providerModelCode` when their active definitions have distinct ids and declared `uniqueProperties`
 - inactive providers, models, and model versions are excluded from new runs and reports
 
 ## Missing configured models
 
-If the main config references a provider/model pair that is not currently available from YAML, the app prints a warning at startup and skips that entry. This behaves the same as omitting that model from the config.
+If the main config references a model id that is not currently available from YAML, the app prints a warning at startup and skips that entry. This behaves the same as omitting that model from the config.
 
 ## Token-limit reruns
 
@@ -161,7 +178,7 @@ The transition is straightforward:
 2. Create those directories on disk.
 3. Convert each provider into a provider-only YAML file.
 4. Convert each runnable model version into its own model YAML file, including full `costs` history.
-5. Keep the main test config as `provider` + `model`, where `model` is the `providerModelCode`.
+5. Update the main test config to reference model definition ids.
 6. Run migrations.
 7. Run the database sync from files.
 
@@ -170,5 +187,5 @@ Rows without matching YAML simply become inactive until corresponding YAML files
 Practical notes:
 
 - If the registry directories are missing, the app fails at startup rather than guessing.
-- If the main config references a provider/model pair that is not yet present in YAML, that entry is warned about and skipped.
+- If the main config references a model id that is not yet present in YAML, that entry is warned about and skipped.
 - If historical runs exist for a model version, make sure the YAML `costs` history starts early enough to cover the oldest recorded run.

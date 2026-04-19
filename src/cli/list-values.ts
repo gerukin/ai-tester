@@ -33,7 +33,7 @@ const formatSection = (title: string, values: string[], emptyMessage: string) =>
 
 export const listAvailableModels = () =>
 	getFileBackedModelRegistry()
-		.activeModels.map(model => JSON.stringify({ provider: model.provider, model: model.providerModelCode }))
+		.activeModels.map(model => JSON.stringify({ id: model.id }))
 		.sort((a, b) => a.localeCompare(b))
 
 export const listAvailableTags = () =>

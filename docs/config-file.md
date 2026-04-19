@@ -2,9 +2,9 @@
 
 The config file is the source of truth for which tests, evaluations, and analysis queries should run. Current and past runs are stored in the database.
 
-The `provider` + `model` references in this file are matched against the active provider/model YAML registry described in [models.md](models.md).
+Model references in this file are matched by `id` against the active model YAML registry described in [models.md](models.md).
 
-If a referenced provider/model pair is not currently available, the app prints a warning at startup and skips that entry.
+If a referenced model id is not currently available, the app prints a warning at startup and skips that entry.
 
 ## Creating the config file
 
@@ -20,12 +20,9 @@ AI_TESTER_CONFIG_PATH=.local/ai-tester.config.yaml
 # Description: Configuration file for the tests to run
 
 # Model versions to test
-# 🚨 the `model` key is the providerModelCode from the corresponding model YAML file
 candidates:
-  - provider: ollama
-    model: gemma2:2b-instruct-q8_0
-  - provider: ollama
-    model: gemma2:9b-instruct-q4_K_M
+  - id: ollama/gemma2:2b-instruct-q8_0/default
+  - id: ollama/gemma2:9b-instruct-q4_K_M/default
 
     # The options here are per model options, and can be applied to candidate or evaluator models
     # [optional] Default temperature to apply to this model (overriding the global default temperature)
@@ -62,10 +59,8 @@ prohibitedTags:
 
 # Models to use to evaluate the generated responses
 evaluators:
-  - provider: ollama
-    model: gemma2:9b-instruct-q4_K_M
-  - provider: ollama
-    model: mistral-nemo:12b-instruct-2407-q4_K_M
+  - id: ollama/gemma2:9b-instruct-q4_K_M/default
+  - id: ollama/mistral-nemo:12b-instruct-2407-q4_K_M/default
 
     # The same options as for candidate models can be applied to evaluator models
 
@@ -104,16 +99,14 @@ analysisQueries:
 
     # [optional] Candidate model versions to include - follows a similar format to the main section
     candidates:
-      - provider: ollama
-        model: phi4:14b-q4_K_M
+      - id: ollama/phi4:14b-q4_K_M/default
 
         # temperature and tags can be applied to models in analysis queries as well
         # (not specified means no restriction for this model)
 
     # [optional] Evaluators to include - follows a similar format to the main section
     evaluators:
-      - provider: ollama
-        model: phi4:14b-q4_K_M
+      - id: ollama/phi4:14b-q4_K_M/default
 
         # temperature and tags can be applied to models in analysis queries as well
         # (not specified means no restriction for this model)
@@ -121,12 +114,10 @@ analysisQueries:
 
 ### Model references
 
-A provider/model pair in the config maps to:
+A model id in the config maps to one active model YAML definition.
 
-- a provider YAML file
-- a model YAML file whose `providerModelCode` matches the `model` value
-
-The model grouping `code` from the model YAML is not used directly in this config file.
+Use `ai-tester list --models` to print active ids in the override-ready JSON format.
+The model grouping `code`, provider code, and provider-facing `providerModelCode` from model YAML files are not used directly in this config file.
 
 ### Analysis queries
 

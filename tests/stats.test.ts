@@ -24,6 +24,35 @@ const expectModuleSuccess = (result: { status: number | null; stdout: string; st
 	}
 }
 
+const writeStatsModelRegistry = async (env: Awaited<ReturnType<typeof createSyncTestEnv>>) => {
+	await env.write(
+		'data/providers/candidate-provider.yaml',
+		['code: candidate-provider', 'name: Candidate provider', 'type: openai'].join('\n')
+	)
+	await env.write(
+		'data/providers/evaluator-provider.yaml',
+		['code: evaluator-provider', 'name: Evaluator provider', 'type: openai'].join('\n')
+	)
+	await env.write(
+		'data/models/candidate-model.yaml',
+		[
+			'code: candidate-model',
+			'provider: candidate-provider',
+			'providerModelCode: candidate-model',
+			'costs: []',
+		].join('\n')
+	)
+	await env.write(
+		'data/models/evaluator-model.yaml',
+		[
+			'code: evaluator-model',
+			'provider: evaluator-provider',
+			'providerModelCode: evaluator-model',
+			'costs: []',
+		].join('\n')
+	)
+}
+
 test('showStats warns when the query has no active candidate models', async t => {
 	const env = await createSyncTestEnv()
 	t.after(async () => {
@@ -61,6 +90,7 @@ test('showStats aggregates filtered sessions, evaluations, and converted costs',
 		modelCode: 'evaluator-model',
 		providerModelCode: 'evaluator-model',
 	})
+	await writeStatsModelRegistry(env)
 	const { promptVersion: candidatePromptVersion } = await insertPromptVersion(env.db, {
 		code: 'candidate-prompt',
 		content: 'Answer briefly.',
@@ -225,15 +255,13 @@ test('showStats aggregates filtered sessions, evaluations, and converted costs',
 			evaluatorsTemperature: 0.4,
 			candidates: [
 				{
-					provider: 'candidate-provider',
-					model: 'candidate-model',
+					id: 'candidate-provider/candidate-model',
 					temperature: 0.3,
 				},
 			],
 			evaluators: [
 				{
-					provider: 'evaluator-provider',
-					model: 'evaluator-model',
+					id: 'evaluator-provider/evaluator-model',
 					temperature: 0.4,
 				},
 			],
@@ -244,7 +272,7 @@ test('showStats aggregates filtered sessions, evaluations, and converted costs',
 	assert.strictEqual(output.tables.length, 1)
 
 	const table = output.tables[0]?.[0] as Record<string, Record<string, string | number>>
-	assert.deepStrictEqual(table['candidate-model'], {
+	assert.deepStrictEqual(table['candidate-provider/candidate-model'], {
 		Provider: 'candidate-provider',
 		'✅%': 100,
 		'sess.': 1,
@@ -271,6 +299,7 @@ test('showStats filters sessions by candidate system prompt code or version hash
 		modelCode: 'evaluator-model',
 		providerModelCode: 'evaluator-model',
 	})
+	await writeStatsModelRegistry(env)
 	const { prompt: helpfulPrompt, promptVersion: helpfulPromptVersion1 } = await insertPromptVersion(env.db, {
 		code: 'helpful',
 		content: 'Answer helpfully.',
@@ -416,20 +445,18 @@ test('showStats filters sessions by candidate system prompt code or version hash
 				systemPrompts,
 				candidates: [
 					{
-						provider: 'candidate-provider',
-						model: 'candidate-model',
+						id: 'candidate-provider/candidate-model',
 					},
 				],
 				evaluators: [
 					{
-						provider: 'evaluator-provider',
-						model: 'evaluator-model',
+						id: 'evaluator-provider/evaluator-model',
 					},
 				],
 			})
 		).tables[0]?.[0] as Record<string, Record<string, string | number>>
 
-	assert.deepStrictEqual(runPromptQuery(['helpful'])['candidate-model'], {
+	assert.deepStrictEqual(runPromptQuery(['helpful'])['candidate-provider/candidate-model'], {
 		Provider: 'candidate-provider',
 		'✅%': 50,
 		'sess.': 2,
@@ -438,7 +465,7 @@ test('showStats filters sessions by candidate system prompt code or version hash
 		'💰/💯sess.': '$100.00',
 		'Tot.💰': '$2.00',
 	})
-	assert.deepStrictEqual(runPromptQuery(['helpful-v2-hash'])['candidate-model'], {
+	assert.deepStrictEqual(runPromptQuery(['helpful-v2-hash'])['candidate-provider/candidate-model'], {
 		Provider: 'candidate-provider',
 		'✅%': 0,
 		'sess.': 1,
@@ -447,7 +474,7 @@ test('showStats filters sessions by candidate system prompt code or version hash
 		'💰/💯sess.': '$100.00',
 		'Tot.💰': '$1.00',
 	})
-	assert.deepStrictEqual(runPromptQuery(['helpful-v1-hash', 'concise'])['candidate-model'], {
+	assert.deepStrictEqual(runPromptQuery(['helpful-v1-hash', 'concise'])['candidate-provider/candidate-model'], {
 		Provider: 'candidate-provider',
 		'✅%': 100,
 		'sess.': 2,

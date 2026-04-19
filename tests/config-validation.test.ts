@@ -46,10 +46,8 @@ test('config loading rejects duplicate configured model references', async t => 
 		[
 			'candidatesTemperature: 0.3',
 			'candidates:',
-			'  - provider: openai',
-			'    model: gpt-4o-mini',
-			'  - provider: openai',
-			'    model: gpt-4o-mini',
+			'  - id: openai/gpt-4o-mini',
+			'  - id: openai/gpt-4o-mini',
 			'attempts: 1',
 			'requiredTags1: []',
 			'requiredTags2: []',
@@ -61,6 +59,31 @@ test('config loading rejects duplicate configured model references', async t => 
 	)
 
 	expectModuleFailure(env.runModule('config:getResolvedTestsConfig'), /Duplicate configured model reference/)
+})
+
+test('config loading rejects empty configured model ids', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	await env.write(
+		'ai-tester.config.yaml',
+		[
+			'candidatesTemperature: 0.3',
+			'candidates:',
+			'  - id: ""',
+			'attempts: 1',
+			'requiredTags1: []',
+			'requiredTags2: []',
+			'prohibitedTags: []',
+			'evaluators: []',
+			'evaluatorsTemperature: 0.4',
+			'evaluationsPerEvaluator: 1',
+		].join('\n')
+	)
+
+	expectModuleFailure(env.runModule('config:getResolvedTestsConfig'), /String must contain at least 1 character/)
 })
 
 test('config loading rejects duplicate analysis query descriptions', async t => {
@@ -119,19 +142,15 @@ test('resolveTestsConfig filters unavailable configured models from tests and an
 		[
 			'candidatesTemperature: 0.3',
 			'candidates:',
-			'  - provider: openai',
-			'    model: gpt-4o-mini',
-			'  - provider: openai',
-			'    model: missing-candidate',
+			'  - id: openai/gpt-4o-mini',
+			'  - id: openai/missing-candidate',
 			'attempts: 1',
 			'requiredTags1: []',
 			'requiredTags2: []',
 			'prohibitedTags: []',
 			'evaluators:',
-			'  - provider: openai',
-			'    model: gpt-4o-mini',
-			'  - provider: openai',
-			'    model: missing-evaluator',
+			'  - id: openai/gpt-4o-mini',
+			'  - id: openai/missing-evaluator',
 			'evaluatorsTemperature: 0.4',
 			'evaluationsPerEvaluator: 1',
 			'analysisQueries:',
@@ -141,13 +160,10 @@ test('resolveTestsConfig filters unavailable configured models from tests and an
 			'      - helpful',
 			'      - helpful-v1-hash',
 			'    candidates:',
-			'      - provider: openai',
-			'        model: gpt-4o-mini',
-			'      - provider: openai',
-			'        model: missing-analysis-candidate',
+			'      - id: openai/gpt-4o-mini',
+			'      - id: openai/missing-analysis-candidate',
 			'    evaluators:',
-			'      - provider: openai',
-			'        model: missing-analysis-evaluator',
+			'      - id: openai/missing-analysis-evaluator',
 		].join('\n')
 	)
 	await env.write(
@@ -157,20 +173,20 @@ test('resolveTestsConfig filters unavailable configured models from tests and an
 
 	const result = expectModuleSuccess(env.runModule('config:getResolvedTestsConfig')) as {
 		resolvedTestsConfig: {
-			candidates: Array<{ provider: string; model: string }>
-			evaluators: Array<{ provider: string; model: string }>
+			candidates: Array<{ id: string }>
+			evaluators: Array<{ id: string }>
 			analysisQueries?: Array<{
 				systemPrompts?: string[]
-				candidates?: Array<{ provider: string; model: string }>
-				evaluators?: Array<{ provider: string; model: string }>
+				candidates?: Array<{ id: string }>
+				evaluators?: Array<{ id: string }>
 			}>
 		}
 	}
 
-	assert.deepStrictEqual(result.resolvedTestsConfig.candidates, [{ provider: 'openai', model: 'gpt-4o-mini' }])
-	assert.deepStrictEqual(result.resolvedTestsConfig.evaluators, [{ provider: 'openai', model: 'gpt-4o-mini' }])
+	assert.deepStrictEqual(result.resolvedTestsConfig.candidates, [{ id: 'openai/gpt-4o-mini' }])
+	assert.deepStrictEqual(result.resolvedTestsConfig.evaluators, [{ id: 'openai/gpt-4o-mini' }])
 	assert.deepStrictEqual(result.resolvedTestsConfig.analysisQueries?.[0]?.candidates, [
-		{ provider: 'openai', model: 'gpt-4o-mini' },
+		{ id: 'openai/gpt-4o-mini' },
 	])
 	assert.deepStrictEqual(result.resolvedTestsConfig.analysisQueries?.[0]?.systemPrompts, [
 		'helpful',
@@ -275,6 +291,7 @@ test('model registry rejects duplicate runtime identities across YAML entries', 
 		'data/models/a.yaml',
 		[
 			'code: gpt-4o-mini-a',
+			'id: openai/gpt-4o-mini/a',
 			'provider: openai',
 			'providerModelCode: gpt-4o-mini',
 			'providerOptions:',
@@ -285,6 +302,7 @@ test('model registry rejects duplicate runtime identities across YAML entries', 
 		'data/models/b.yaml',
 		[
 			'code: gpt-4o-mini-b',
+			'id: openai/gpt-4o-mini/b',
 			'provider: openai',
 			'providerModelCode: gpt-4o-mini',
 			'providerOptions:',
@@ -295,7 +313,7 @@ test('model registry rejects duplicate runtime identities across YAML entries', 
 	expectModuleFailure(env.runModule('modelRegistry:loadModels'), /Duplicate runtime model identity found in YAML files/)
 })
 
-test('model registry rejects conflicting active variants for the same provider model code', async t => {
+test('model registry rejects duplicate active model ids across YAML entries', async t => {
 	const env = await createSyncTestEnv()
 	t.after(async () => {
 		await env.cleanup()
@@ -306,6 +324,7 @@ test('model registry rejects conflicting active variants for the same provider m
 		'data/models/a.yaml',
 		[
 			'code: gpt-4o-mini-a',
+			'id: openai/gpt-4o-mini/shared',
 			'provider: openai',
 			'providerModelCode: gpt-4o-mini',
 			'providerOptions:',
@@ -316,6 +335,7 @@ test('model registry rejects conflicting active variants for the same provider m
 		'data/models/b.yaml',
 		[
 			'code: gpt-4o-mini-b',
+			'id: openai/gpt-4o-mini/shared',
 			'provider: openai',
 			'providerModelCode: gpt-4o-mini',
 			'providerOptions:',
@@ -323,7 +343,103 @@ test('model registry rejects conflicting active variants for the same provider m
 		].join('\n')
 	)
 
-	expectModuleFailure(env.runModule('modelRegistry:loadRegistry'), /Conflicting active model variants for openai:gpt-4o-mini/)
+	expectModuleFailure(env.runModule('modelRegistry:loadModels'), /Duplicate active model id found in YAML files/)
+})
+
+test('model registry allows inactive legacy entries with the same derived default id', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	await env.write('data/providers/openai.yaml', ['code: openai', 'name: OpenAI', 'type: openai'].join('\n'))
+	await env.write(
+		'data/models/a.yaml',
+		[
+			'code: gpt-4o-mini-a',
+			'active: false',
+			'provider: openai',
+			'providerModelCode: gpt-4o-mini',
+			'providerOptions:',
+			'  seed: 1',
+		].join('\n')
+	)
+	await env.write(
+		'data/models/b.yaml',
+		[
+			'code: gpt-4o-mini-b',
+			'active: false',
+			'provider: openai',
+			'providerModelCode: gpt-4o-mini',
+			'providerOptions:',
+			'  seed: 2',
+		].join('\n')
+	)
+
+	const models = expectModuleSuccess(env.runModule('modelRegistry:loadModels')) as Array<{ id: string }>
+	assert.deepStrictEqual(
+		models.map(model => model.id),
+		['openai/gpt-4o-mini', 'openai/gpt-4o-mini']
+	)
+})
+
+test('model registry rejects unique property paths resolved through object prototypes', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	await env.write('data/providers/openai.yaml', ['code: openai', 'name: OpenAI', 'type: openai'].join('\n'))
+	await env.write(
+		'data/models/gpt-4o-mini.yaml',
+		[
+			'code: gpt-4o-mini',
+			'id: openai/gpt-4o-mini/prototype',
+			'provider: openai',
+			'providerModelCode: gpt-4o-mini',
+			'uniqueProperties:',
+			'  - providerOptions.constructor',
+			'providerOptions: {}',
+		].join('\n')
+	)
+
+	expectModuleFailure(
+		env.runModule('modelRegistry:loadModels'),
+		/declares uniqueProperties path providerOptions\.constructor, but that value is not set/
+	)
+})
+
+test('model registry rejects active variants without declared unique properties', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	await env.write('data/providers/openai.yaml', ['code: openai', 'name: OpenAI', 'type: openai'].join('\n'))
+	await env.write(
+		'data/models/a.yaml',
+		[
+			'code: gpt-4o-mini-a',
+			'id: openai/gpt-4o-mini/a',
+			'provider: openai',
+			'providerModelCode: gpt-4o-mini',
+			'providerOptions:',
+			'  seed: 1',
+		].join('\n')
+	)
+	await env.write(
+		'data/models/b.yaml',
+		[
+			'code: gpt-4o-mini-b',
+			'id: openai/gpt-4o-mini/b',
+			'provider: openai',
+			'providerModelCode: gpt-4o-mini',
+			'providerOptions:',
+			'  seed: 2',
+		].join('\n')
+	)
+
+	expectModuleFailure(env.runModule('modelRegistry:loadRegistry'), /must declare uniqueProperties/)
 })
 
 test('model registry loads capabilities and defaults missing capability keys to false', async t => {

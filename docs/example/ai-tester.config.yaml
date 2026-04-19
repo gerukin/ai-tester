@@ -2,14 +2,10 @@
 
 candidatesTemperature: 0.3
 candidates:
-  - provider: ollama
-    model: phi4:14b-q4_K_M
-  - provider: openai
-    model: gpt-4o-mini-2024-07-18
-  - provider: openrouter
-    model: openai/gpt-4o-mini
-  - provider: vertex
-    model: gemini-1.5-flash-002
+  - id: ollama/phi4:14b-q4_K_M/default
+  - id: openai/gpt-4o-mini-2024-07-18/reasoning-low
+  - id: openrouter/openai-gpt-4o-mini/default
+  - id: vertex/gemini-1.5-flash-002/default
 
 attempts: 1
 
@@ -26,16 +22,11 @@ requiredTags2:
 evaluatorsTemperature: 0.5
 evaluationsPerEvaluator: 2
 evaluators:
-  - provider: ollama
-    model: gemma2:9b-instruct-q4_K_M
-  - provider: ollama
-    model: mistral-nemo:12b-instruct-2407-q4_K_M
-  - provider: ollama
-    model: phi4:14b-q4_K_M
-  - provider: openai
-    model: gpt-4o-mini-2024-07-18
-  - provider: vertex
-    model: gemini-1.5-flash-002
+  - id: ollama/gemma2:9b-instruct-q4_K_M/default
+  - id: ollama/mistral-nemo:12b-instruct-2407-q4_K_M/default
+  - id: ollama/phi4:14b-q4_K_M/default
+  - id: openai/gpt-4o-mini-2024-07-18/reasoning-low
+  - id: vertex/gemini-1.5-flash-002/default
 
 analysisQueries:
   - description: All models (JPY costs)
@@ -48,5 +39,4 @@ analysisQueries:
     requiredTags2:
       - reasoning
     candidates:
-      - provider: ollama
-        model: phi4:14b-q4_K_M
+      - id: ollama/phi4:14b-q4_K_M/default

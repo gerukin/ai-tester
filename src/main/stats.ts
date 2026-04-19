@@ -1,9 +1,15 @@
-import { and, or, eq, ne, inArray, sql, countDistinct, desc, aliasedTable } from 'drizzle-orm'
+import { and, or, eq, not, inArray, sql, countDistinct, desc, aliasedTable } from 'drizzle-orm'
 
 import { schema } from '../database/schema.js'
 import { type AnalysisQuery } from '../config/index.js'
 import { db } from '../database/db.js'
 import { sessionEvaluations } from '../database/schema/sessions.js'
+import { getFileBackedModelRegistry } from '../config/model-registry.js'
+import {
+	getConfiguredModelDefinition,
+	getModelVersionLabel,
+	modelVersionMatchesDefinition,
+} from './model-definition-filters.js'
 
 /** Locale to use for currency formatting, determined by the JS runtime */
 const LOCALE = navigator.language ?? 'en-US'
@@ -13,6 +19,7 @@ const EXTRA_FRACTION_DIGITS = 2
 
 export const showStats = async (query: AnalysisQuery) => {
 	console.log('Checking for stats...')
+	const registry = getFileBackedModelRegistry()
 
 	if (query.candidates && query.candidates.length === 0) {
 		console.log(`⚠️ Query "${query.description}" has no active candidate models.`)
@@ -24,23 +31,31 @@ export const showStats = async (query: AnalysisQuery) => {
 		return
 	}
 
+	const candidatesWithDefinitions = query.candidates?.map(candidate => ({
+		...candidate,
+		modelDefinition: getConfiguredModelDefinition(registry, candidate),
+	}))
+	const evaluatorsWithDefinitions = query.evaluators?.map(evaluator => ({
+		...evaluator,
+		modelDefinition: getConfiguredModelDefinition(registry, evaluator),
+	}))
 	const candidateModelConfigsWithTemperature =
-		query.candidates?.filter(candidate => candidate.temperature !== undefined) ?? []
+		candidatesWithDefinitions?.filter(candidate => candidate.temperature !== undefined) ?? []
 	const modelConfigsWithTags =
-		query.candidates?.filter(candidate => candidate.requiredTags !== undefined && candidate.requiredTags.length > 0) ??
+		candidatesWithDefinitions?.filter(candidate => candidate.requiredTags !== undefined && candidate.requiredTags.length > 0) ??
 		[]
 	const modelConfigsWithProhibitedTags =
-		query.candidates?.filter(
+		candidatesWithDefinitions?.filter(
 			candidate => candidate.prohibitedTags !== undefined && candidate.prohibitedTags.length > 0
 		) ?? []
 
 	const evaluatorModelConfigsWithTemperature =
-		query.evaluators?.filter(evaluator => evaluator.temperature !== undefined) ?? []
+		evaluatorsWithDefinitions?.filter(evaluator => evaluator.temperature !== undefined) ?? []
 	const evaluatorModelConfigsWithTags =
-		query.evaluators?.filter(evaluator => evaluator.requiredTags !== undefined && evaluator.requiredTags.length > 0) ??
+		evaluatorsWithDefinitions?.filter(evaluator => evaluator.requiredTags !== undefined && evaluator.requiredTags.length > 0) ??
 		[]
 	const evaluatorModelConfigsWithProhibitedTags =
-		query.evaluators?.filter(
+		evaluatorsWithDefinitions?.filter(
 			evaluator => evaluator.prohibitedTags !== undefined && evaluator.prohibitedTags.length > 0
 		) ?? []
 	const systemPromptRefs = query.systemPrompts ?? []
@@ -74,6 +89,8 @@ export const showStats = async (query: AnalysisQuery) => {
 			.select({
 				testVersionId: testVersions.id,
 				modelVersionCode: modelVersions.providerModelCode,
+				modelVersionExtraIdentifier: modelVersions.extraIdentifier,
+				modelVersionRuntimeOptionsJson: modelVersions.runtimeOptionsJson,
 				providerCode: providers.code,
 
 				// Drizzle-ORM doesn't auto-alias columns, and does not support aliasing columns manually, so we have to use the raw SQL
@@ -108,8 +125,7 @@ export const showStats = async (query: AnalysisQuery) => {
 								evaluatorModelConfigsWithTemperature.map(
 									evaluator =>
 										sql`WHEN
-											${eq(evaluatorModelVersionAlias.providerModelCode, evaluator.model)}
-											AND ${eq(evaluatorProviderAlias.code, evaluator.provider)}
+											${modelVersionMatchesDefinition(evaluatorProviderAlias, evaluatorModelVersionAlias, evaluator.modelDefinition, 'evaluator')}
 											THEN ${evaluator.temperature}`
 								)
 							)}
@@ -123,11 +139,11 @@ export const showStats = async (query: AnalysisQuery) => {
 				and(
 					eq(sessions.modelVersionId, modelVersions.id),
 					eq(modelVersions.active, true),
-					...(query.candidates
+					...(candidatesWithDefinitions
 						? [
 								or(
-									...query.candidates.map(({ provider, model }) =>
-										and(eq(providers.code, provider), eq(modelVersions.providerModelCode, model))
+									...candidatesWithDefinitions.map(candidate =>
+										modelVersionMatchesDefinition(providers, modelVersions, candidate.modelDefinition, 'candidate')
 									)
 								),
 						  ]
@@ -140,11 +156,11 @@ export const showStats = async (query: AnalysisQuery) => {
 				and(
 					eq(sessionEvaluations.modelVersionId, evaluatorModelVersionAlias.id),
 					eq(evaluatorModelVersionAlias.active, true),
-					...(query.evaluators
+					...(evaluatorsWithDefinitions
 						? [
 								or(
-									...query.evaluators.map(({ provider, model }) =>
-										and(eq(evaluatorProviderAlias.code, provider), eq(evaluatorModelVersionAlias.providerModelCode, model))
+									...evaluatorsWithDefinitions.map(evaluator =>
+										modelVersionMatchesDefinition(evaluatorProviderAlias, evaluatorModelVersionAlias, evaluator.modelDefinition, 'evaluator')
 									)
 								),
 						  ]
@@ -174,8 +190,7 @@ export const showStats = async (query: AnalysisQuery) => {
 								candidateModelConfigsWithTemperature.map(
 									candidate =>
 										sql`WHEN
-											${eq(modelVersions.providerModelCode, candidate.model)}
-											AND ${eq(providers.code, candidate.provider)}
+											${modelVersionMatchesDefinition(providers, modelVersions, candidate.modelDefinition, 'candidate')}
 											THEN ${candidate.temperature}`
 								)
 							)}
@@ -215,8 +230,7 @@ export const showStats = async (query: AnalysisQuery) => {
 							? modelConfigsWithTags.map(
 									candidate =>
 										sql`sum(CASE WHEN ${or(
-											ne(modelVersions.providerModelCode, candidate.model),
-											ne(providers.code, candidate.provider),
+											not(modelVersionMatchesDefinition(providers, modelVersions, candidate.modelDefinition, 'candidate')),
 											inArray(tags.name, candidate.requiredTags!)
 										)} THEN 1 ELSE 0 END) > 0`
 							  )
@@ -227,8 +241,7 @@ export const showStats = async (query: AnalysisQuery) => {
 							? modelConfigsWithProhibitedTags.map(
 									candidate =>
 										sql`sum(CASE WHEN ${and(
-											eq(modelVersions.providerModelCode, candidate.model),
-											eq(providers.code, candidate.provider),
+											modelVersionMatchesDefinition(providers, modelVersions, candidate.modelDefinition, 'candidate'),
 											inArray(tags.name, candidate.prohibitedTags!)
 										)} THEN 1 ELSE 0 END) = 0`
 							  )
@@ -239,8 +252,7 @@ export const showStats = async (query: AnalysisQuery) => {
 							? evaluatorModelConfigsWithTags.map(
 									evaluator =>
 										sql`sum(CASE WHEN ${or(
-											ne(evaluatorModelVersionAlias.providerModelCode, evaluator.model),
-											ne(evaluatorProviderAlias.code, evaluator.provider),
+											not(modelVersionMatchesDefinition(evaluatorProviderAlias, evaluatorModelVersionAlias, evaluator.modelDefinition, 'evaluator')),
 											inArray(tags.name, evaluator.requiredTags!)
 										)} THEN 1 ELSE 0 END) > 0`
 							  )
@@ -251,8 +263,7 @@ export const showStats = async (query: AnalysisQuery) => {
 							? evaluatorModelConfigsWithProhibitedTags.map(
 									evaluator =>
 										sql`sum(CASE WHEN ${and(
-											eq(evaluatorModelVersionAlias.providerModelCode, evaluator.model),
-											eq(evaluatorProviderAlias.code, evaluator.provider),
+											modelVersionMatchesDefinition(evaluatorProviderAlias, evaluatorModelVersionAlias, evaluator.modelDefinition, 'evaluator'),
 											inArray(tags.name, evaluator.prohibitedTags!)
 										)} THEN 1 ELSE 0 END) = 0`
 							  )
@@ -320,6 +331,8 @@ export const showStats = async (query: AnalysisQuery) => {
 			testsCount: countDistinct(cte.testVersionId),
 			evalsCount: sql<number>`SUM(${cte.evalsCount})`,
 			modelVersionCode: cte.modelVersionCode,
+			modelVersionExtraIdentifier: cte.modelVersionExtraIdentifier,
+			modelVersionRuntimeOptionsJson: cte.modelVersionRuntimeOptionsJson,
 			providerCode: cte.providerCode,
 			passRate: passRateQuery,
 			costPerSession: costPerSessionQuery.as('costPerSession'),
@@ -354,7 +367,7 @@ export const showStats = async (query: AnalysisQuery) => {
 		Object.fromEntries(
 			stats.map(result => {
 				return [
-					result.modelVersionCode,
+					getModelVersionLabel(registry, result),
 					{
 						Provider: result.providerCode,
 						'✅%': Number((result.passRate * 100).toFixed(0)),

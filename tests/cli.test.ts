@@ -308,7 +308,7 @@ test('cli list prints file-backed values for runtime overrides without an existi
 
 	assert.strictEqual(output.result.exitCode, 0)
 	const text = String(output.logs[0]?.[0])
-	assert.match(text, /Models:\n  {"provider":"openai","model":"gpt-4o-mini-2024-07-18"}/)
+	assert.match(text, /Models:\n  {"id":"openai\/gpt-4o-mini-2024-07-18"}/)
 	assert.doesNotMatch(text, /gemma2:9b/)
 	assert.match(text, /Tags:\n  lang_en\n  reasoning\n  smoke/)
 	assert.match(text, /Prompts:\n  concise\n  helpful/)
@@ -629,8 +629,7 @@ test('cli stats --list prints configured analysis query descriptions in order', 
 			'  - description: Hidden query',
 			'    currency: USD',
 			'    candidates:',
-			'      - provider: missing',
-			'        model: missing',
+			'      - id: missing/missing',
 			'  - description: Second query',
 			'    currency: USD',
 		].join('\n')
@@ -911,7 +910,7 @@ test('cli stats --dry-run suppresses unavailable model warnings for ad hoc queri
 				'--query-json',
 				JSON.stringify({
 					currency: 'USD',
-					candidates: [{ provider: 'missing', model: 'missing' }],
+					candidates: [{ id: 'missing/missing' }],
 				}),
 			],
 		})
@@ -1128,8 +1127,8 @@ test('cli run-tests runtime overrides filter unavailable model references', asyn
 				'--config-overrides',
 				JSON.stringify({
 					candidates: [
-						{ provider: 'openai', model: 'gpt-4o-mini' },
-						{ provider: 'openai', model: 'missing-model' },
+						{ id: 'openai/gpt-4o-mini' },
+						{ id: 'openai/missing-model' },
 					],
 				}),
 			],
@@ -1148,9 +1147,9 @@ test('cli run-tests runtime overrides filter unavailable model references', asyn
 		String(entry[0]).startsWith('Dry run: resolved test run configuration:')
 	)
 	const resolvedConfig = JSON.parse(String(resolvedLog?.[0]).split('\n').slice(1).join('\n')) as {
-		candidates: Array<{ provider: string; model: string }>
+		candidates: Array<{ id: string }>
 	}
-	assert.deepStrictEqual(resolvedConfig.candidates, [{ provider: 'openai', model: 'gpt-4o-mini' }])
+	assert.deepStrictEqual(resolvedConfig.candidates, [{ id: 'openai/gpt-4o-mini' }])
 })
 
 test('run-tests confirmation cancellation happens before runtime config parsing', async t => {

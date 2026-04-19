@@ -1,7 +1,7 @@
 /**
  * This module is responsible for running all test sessions that have not been run yet.
  */
-import { and, or, eq, ne, inArray, sql, lt, countDistinct } from 'drizzle-orm';
+import { and, or, eq, not, inArray, sql, lt, countDistinct } from 'drizzle-orm';
 import { generateText, jsonSchema, Output, } from 'ai';
 import { schema } from '../database/schema.js';
 import { getSectionsFromMarkdownContent, sectionsToAiMessages, getReferencedFiles } from '../utils/markdown.js';
@@ -9,6 +9,7 @@ import { ToolDefinition } from './tool-definition.js';
 import { getRequiredLanguageModelTokenUsage, getTrimmedReasoningText } from '../utils/ai-sdk.js';
 import { getModelCapabilityStatus, getReferencedFileInputCapabilities, logCapabilitySkip, warnIfCapabilitiesUndeclared, } from './capabilities.js';
 import { refreshSessionTokenLimitState } from './token-limits.js';
+import { getConfiguredModelDefinition, getModelDefinitionForVersion, getModelVersionLabel, modelVersionMatchesDefinition, } from './model-definition-filters.js';
 /**
  * Logs the number of skipped tests based on the current attempt and total attempts.
  * @param attempts The total number of attempts for the test.
@@ -31,13 +32,19 @@ const getMissingTests = async (db, testsConfig, registry, envConfig, { log = tru
     }
     // we query the DB to get all missing tests not yet run
     const { testVersions, testToTagRels, tags, sessions, modelVersions, providers, models, testToSystemPromptVersionRels, promptVersions, structuredObjectVersions, toolVersions, testToToolVersionRels, } = schema;
-    const modelConfigsWithTemperature = testsConfig.candidates.filter(candidate => candidate.temperature !== undefined);
-    const modelConfigsWithTags = testsConfig.candidates.filter(candidate => candidate.requiredTags !== undefined && candidate.requiredTags.length > 0);
-    const modelConfigsWithProhibitedTags = testsConfig.candidates.filter(candidate => candidate.prohibitedTags !== undefined && candidate.prohibitedTags.length > 0);
+    const candidatesWithDefinitions = testsConfig.candidates.map(candidate => ({
+        ...candidate,
+        modelDefinition: getConfiguredModelDefinition(registry, candidate),
+    }));
+    const modelConfigsWithTemperature = candidatesWithDefinitions.filter(candidate => candidate.temperature !== undefined);
+    const modelConfigsWithTags = candidatesWithDefinitions.filter(candidate => candidate.requiredTags !== undefined && candidate.requiredTags.length > 0);
+    const modelConfigsWithProhibitedTags = candidatesWithDefinitions.filter(candidate => candidate.prohibitedTags !== undefined && candidate.prohibitedTags.length > 0);
     const missingTests = await db
         .select({
         modelVersionId: modelVersions.id,
         modelVersionCode: modelVersions.providerModelCode,
+        modelVersionExtraIdentifier: modelVersions.extraIdentifier,
+        modelVersionRuntimeOptionsJson: modelVersions.runtimeOptionsJson,
         providerCode: providers.code,
         testVersionId: testVersions.id,
         testContent: testVersions.content,
@@ -59,7 +66,7 @@ const getMissingTests = async (db, testsConfig, registry, envConfig, { log = tru
     })
         .from(modelVersions)
         .innerJoin(models, and(eq(models.id, modelVersions.modelId), eq(models.active, true), eq(modelVersions.active, true)))
-        .innerJoin(providers, and(eq(providers.id, modelVersions.providerId), eq(providers.active, true), or(...testsConfig.candidates.map(({ provider, model }) => and(eq(providers.code, provider), eq(modelVersions.providerModelCode, model))))))
+        .innerJoin(providers, and(eq(providers.id, modelVersions.providerId), eq(providers.active, true), or(...candidatesWithDefinitions.map(candidate => modelVersionMatchesDefinition(providers, modelVersions, candidate.modelDefinition, 'candidate')))))
         // always true to fetch all possible test combinations (we will filter later - cross joins aren't supported in drizzle-orm as of now)
         .innerJoin(testVersions, and(eq(testVersions.id, testVersions.id), eq(testVersions.active, true)))
         // Join the expected structured object version if needed
@@ -72,8 +79,7 @@ const getMissingTests = async (db, testsConfig, registry, envConfig, { log = tru
         .leftJoin(sessions, and(eq(sessions.testVersionId, testVersions.id), eq(sessions.modelVersionId, modelVersions.id), eq(sessions.candidateSysPromptVersionId, promptVersions.id), eq(sessions.active, true), modelConfigsWithTemperature.length > 0
         ? sql `${sessions.temperature} = CASE
 								${sql.join(modelConfigsWithTemperature.map(candidate => sql `WHEN
-												${eq(modelVersions.providerModelCode, candidate.model)}
-												AND ${eq(providers.code, candidate.provider)}
+												${modelVersionMatchesDefinition(providers, modelVersions, candidate.modelDefinition, 'candidate')}
 												THEN ${candidate.temperature}`))}
 								ELSE ${testsConfig.candidatesTemperature}
 							END`
@@ -99,11 +105,11 @@ const getMissingTests = async (db, testsConfig, registry, envConfig, { log = tru
             : []),
         // ensure we have all required tags for each model
         ...(modelConfigsWithTags.length > 0
-            ? modelConfigsWithTags.map(candidate => sql `sum(CASE WHEN ${or(ne(modelVersions.providerModelCode, candidate.model), ne(providers.code, candidate.provider), inArray(tags.name, candidate.requiredTags))} THEN 1 ELSE 0 END) > 0`)
+            ? modelConfigsWithTags.map(candidate => sql `sum(CASE WHEN ${or(not(modelVersionMatchesDefinition(providers, modelVersions, candidate.modelDefinition, 'candidate')), inArray(tags.name, candidate.requiredTags))} THEN 1 ELSE 0 END) > 0`)
             : []),
         // ensure we don't have any prohibited tags for each model
         ...(modelConfigsWithProhibitedTags.length > 0
-            ? modelConfigsWithProhibitedTags.map(candidate => sql `sum(CASE WHEN ${and(eq(modelVersions.providerModelCode, candidate.model), eq(providers.code, candidate.provider), inArray(tags.name, candidate.prohibitedTags))} THEN 1 ELSE 0 END) = 0`)
+            ? modelConfigsWithProhibitedTags.map(candidate => sql `sum(CASE WHEN ${and(modelVersionMatchesDefinition(providers, modelVersions, candidate.modelDefinition, 'candidate'), inArray(tags.name, candidate.prohibitedTags))} THEN 1 ELSE 0 END) = 0`)
             : []),
     ]))
         // ordering by model id is important as Ollama and other local models have some initial load time to consider
@@ -111,8 +117,8 @@ const getMissingTests = async (db, testsConfig, registry, envConfig, { log = tru
         .orderBy(modelVersions.id, testVersions.id, promptVersions.id);
     const warnedModelReferences = new Set();
     return missingTests.filter(test => {
-        const modelReference = `${test.providerCode}:${test.modelVersionCode}`;
-        const modelDefinition = registry.modelsByReference.get(modelReference);
+        const modelReference = getModelVersionLabel(registry, test);
+        const modelDefinition = getModelDefinitionForVersion(registry, test);
         const files = getReferencedFiles(test.testContent, envConfig.AI_TESTER_TESTS_DIR);
         const outputRequirements = test.structuredObjectSchema
             ? ['structured']
@@ -140,7 +146,7 @@ export const runAllTestsWithDeps = async ({ db, testsConfig, registry, confirmRu
     const { sessions } = schema;
     const missingTests = await getMissingTests(db, testsConfig, registry, envConfig);
     const modelConfigsWithTemperature = testsConfig.candidates.filter(candidate => candidate.temperature !== undefined);
-    const modelsWithTemperatures = new Map(modelConfigsWithTemperature.map(({ provider, model, temperature }) => [`${provider}:${model}`, temperature]));
+    const modelsWithTemperatures = new Map(modelConfigsWithTemperature.map(({ id, temperature }) => [id, temperature]));
     // The total number of missing tests needs to account for the number of attempts
     const totalMissingTests = missingTests.reduce((acc, test) => acc + (testsConfig.attempts - test.sessionsCount), 0);
     if (totalMissingTests === 0) {
@@ -157,9 +163,9 @@ export const runAllTestsWithDeps = async ({ db, testsConfig, registry, confirmRu
         const provider = getProvider(test.providerCode);
         if (!provider)
             throw new Error(`Provider ${test.providerCode} not found`);
-        const modelDefinition = registry.modelsByReference.get(`${test.providerCode}:${test.modelVersionCode}`);
+        const modelDefinition = getModelDefinitionForVersion(registry, test);
         const model = wrapModel(provider(test.modelVersionCode), 'candidate', modelDefinition);
-        const temperature = modelsWithTemperatures.get(`${test.providerCode}:${test.modelVersionCode}`) ?? testsConfig.candidatesTemperature;
+        const temperature = (modelDefinition ? modelsWithTemperatures.get(modelDefinition.id) : undefined) ?? testsConfig.candidatesTemperature;
         // We extract the array of messages
         const sections = getSectionsFromMarkdownContent(test.testContent);
         const files = getReferencedFiles(test.testContent, envConfig.AI_TESTER_TESTS_DIR, false, 'base64');

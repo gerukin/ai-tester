@@ -40,8 +40,8 @@ ai-tester run-evals --dry-run --include-counts
 Use runtime overrides for temporary scope changes instead of editing config:
 
 ```sh
-ai-tester run-tests --dry-run --config-overrides '{"attempts":2,"requiredTags1":["smoke"],"candidates":[{"provider":"openai","model":"gpt-4o-mini-2024-07-18"}]}'
-ai-tester run-evals --dry-run --config-overrides '{"requiredTags2":["reasoning"],"evaluationsPerEvaluator":2,"evaluators":[{"provider":"openai","model":"gpt-4o-mini-2024-07-18"}]}'
+ai-tester run-tests --dry-run --config-overrides '{"attempts":2,"requiredTags1":["smoke"],"candidates":[{"id":"openai/gpt-4o-mini-2024-07-18/default"}]}'
+ai-tester run-evals --dry-run --config-overrides '{"requiredTags2":["reasoning"],"evaluationsPerEvaluator":2,"evaluators":[{"id":"openai/gpt-4o-mini-2024-07-18/default"}]}'
 ai-tester run-evals --config-overrides-file .local/eval-overrides.json
 ```
 
@@ -49,7 +49,7 @@ ai-tester run-evals --config-overrides-file .local/eval-overrides.json
 
 `run-evals` overrides can include all test-run override fields plus `evaluators`, `evaluatorsTemperature`, and `evaluationsPerEvaluator`.
 
-Model entries use `{ "provider": "...", "model": "..." }`, where `model` is the provider-facing model code from the configured model registry. Per-model `temperature`, `requiredTags`, and `prohibitedTags` are also valid when the user asks for model-specific scope.
+Model entries use `{ "id": "..." }`, where `id` is the model definition id from the configured model registry. Per-model `temperature`, `requiredTags`, and `prohibitedTags` are also valid when the user asks for model-specific scope.
 
 ## Sync, Runs, And Stats
 
@@ -76,7 +76,7 @@ ai-tester stats --query "My query description"
 Use the listed configured query when the user asks for that named query, an existing report, or gives no special filters. If the user gives specific models, tags, prompts, temperatures, evaluators, or currency, use an ad hoc stats query instead:
 
 ```sh
-ai-tester stats --dry-run --query-json '{"currency":"USD","requiredTags1":["smoke"],"candidates":[{"provider":"openai","model":"gpt-4o-mini-2024-07-18"}]}'
+ai-tester stats --dry-run --query-json '{"currency":"USD","requiredTags1":["smoke"],"candidates":[{"id":"openai/gpt-4o-mini-2024-07-18/default"}]}'
 ai-tester stats --query-json '{"currency":"JPY","systemPrompts":["helpful"],"requiredTags2":["reasoning"],"candidatesTemperature":0.2}'
 ai-tester stats --dry-run --query-file .local/stats-query.json
 ```

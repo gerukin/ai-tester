@@ -13,13 +13,13 @@ import {
 } from './helpers/test-harness.js'
 
 const baseTestsConfig = (candidateProvider: string, candidateModel: string, evaluatorProvider: string, evaluatorModel: string) => ({
-	candidates: [{ provider: candidateProvider, model: candidateModel }],
+	candidates: [{ id: `${candidateProvider}/${candidateModel}` }],
 	candidatesTemperature: 0.3,
 	attempts: 1,
 	requiredTags1: [] as string[],
 	requiredTags2: [] as string[],
 	prohibitedTags: [] as string[],
-	evaluators: [{ provider: evaluatorProvider, model: evaluatorModel }],
+	evaluators: [{ id: `${evaluatorProvider}/${evaluatorModel}` }],
 	evaluatorsTemperature: 0.4,
 	evaluationsPerEvaluator: 1,
 	analysisQueries: undefined,
@@ -59,7 +59,19 @@ const createDeps = (
 ) => ({
 	db,
 	testsConfig: baseTestsConfig(candidateProviderCode, candidateModelCode, evaluatorProviderCode, evaluatorModelCode),
-	registry: createRegistry(registryModel as never),
+	registry: createRegistry(
+		{
+			provider: candidateProviderCode,
+			providerModelCode: candidateModelCode,
+			providerOptions: {},
+			thinking: undefined,
+			capabilities: {
+				input: { text: true, image: true, file: true, pdf: true },
+				output: { text: true, structured: true, tools: true, reasoning: true },
+			},
+		},
+		registryModel as never
+	),
 	confirmRun: async () => true,
 	getProvider: (code: string) =>
 		code === evaluatorProviderCode

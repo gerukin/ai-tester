@@ -68,7 +68,16 @@ const RuntimeOptionsOverrideSchema = z.object({
     providerOptions: z.record(JsonValueSchema).optional(),
     thinking: ThinkingConfigSchema,
 });
-export const ModelDefinitionSchema = z.object({
+const VERSIONED_MODEL_PROPERTY_PREFIXES = [
+    'extraIdentifier',
+    'providerOptions',
+    'thinking',
+    'candidateOverrides',
+    'evaluatorOverrides',
+];
+export const ModelDefinitionSchema = z
+    .object({
+    id: z.string().min(1).optional(),
     code: z.string(),
     provider: z.string(),
     providerModelCode: z.string(),
@@ -84,6 +93,7 @@ export const ModelDefinitionSchema = z.object({
     capabilities: ModelCapabilitiesSchema.optional(),
     candidateOverrides: RuntimeOptionsOverrideSchema.optional(),
     evaluatorOverrides: RuntimeOptionsOverrideSchema.optional(),
+    uniqueProperties: z.array(z.string().min(1)).default([]),
     costs: z
         .array(CostDefinitionSchema)
         .default([])
@@ -105,7 +115,11 @@ export const ModelDefinitionSchema = z.object({
             seen.add(cost.validFrom);
         }
     }),
-});
+})
+    .transform(model => ({
+    ...model,
+    id: model.id ?? `${model.provider}/${model.providerModelCode}`,
+}));
 const getYamlFilesOrThrow = (basePath, label) => {
     if (!fs.existsSync(basePath)) {
         throw new Error(`${label} directory not found: ${basePath}`);
@@ -120,25 +134,6 @@ const getModelReferenceKey = (model) => `${model.provider}:${model.providerModel
 export const getModelRuntimeOptions = (model) => ({
     providerOptions: model.providerOptions,
     thinking: model.thinking ?? null,
-});
-export const getRoleAwareModelRuntimeOptions = (model) => ({
-    ...getModelRuntimeOptions(model),
-    ...(model.candidateOverrides !== undefined
-        ? {
-            candidateOverrides: {
-                providerOptions: model.candidateOverrides.providerOptions ?? {},
-                thinking: model.candidateOverrides.thinking ?? null,
-            },
-        }
-        : {}),
-    ...(model.evaluatorOverrides !== undefined
-        ? {
-            evaluatorOverrides: {
-                providerOptions: model.evaluatorOverrides.providerOptions ?? {},
-                thinking: model.evaluatorOverrides.thinking ?? null,
-            },
-        }
-        : {}),
 });
 export const getEffectiveModelRuntimeOptions = (model, type) => {
     const overrides = type === 'candidate' ? model.candidateOverrides : model.evaluatorOverrides;
@@ -155,26 +150,83 @@ export const getEffectiveModelRuntimeOptions = (model, type) => {
             : undefined,
     };
 };
-export const getModelRuntimeOptionsJson = (model) => stableJsonStringify(getRoleAwareModelRuntimeOptions(model));
-const getModelIdentityKey = (model) => `${model.provider}:${model.providerModelCode}:${model.extraIdentifier ?? ''}:${getModelRuntimeOptionsJson(model)}`;
+export const getModelRuntimeOptionsJson = (model, role) => {
+    const options = getEffectiveModelRuntimeOptions(model, role);
+    return stableJsonStringify({
+        providerOptions: options.providerOptions,
+        thinking: options.thinking ?? null,
+    });
+};
+export const getModelRuntimeIdentityKeyFromParts = ({ provider, providerModelCode, extraIdentifier, runtimeOptionsJson, }) => `${provider}:${providerModelCode}:${extraIdentifier ?? ''}:${runtimeOptionsJson}`;
+export const getModelRuntimeIdentityKey = (model, role) => getModelRuntimeIdentityKeyFromParts({
+    provider: model.provider,
+    providerModelCode: model.providerModelCode,
+    extraIdentifier: model.extraIdentifier,
+    runtimeOptionsJson: getModelRuntimeOptionsJson(model, role),
+});
+export const getModelRuntimeIdentityKeys = (model) => Array.from(new Set(['candidate', 'evaluator'].map(role => getModelRuntimeIdentityKey(model, role))));
+export const getModelRuntimeIdentities = (model) => {
+    const identities = new Map();
+    for (const role of ['candidate', 'evaluator']) {
+        const runtimeOptionsJson = getModelRuntimeOptionsJson(model, role);
+        const key = getModelRuntimeIdentityKeyFromParts({
+            provider: model.provider,
+            providerModelCode: model.providerModelCode,
+            extraIdentifier: model.extraIdentifier,
+            runtimeOptionsJson,
+        });
+        identities.set(key, { key, runtimeOptionsJson });
+    }
+    return Array.from(identities.values());
+};
+const getModelPropertyValue = (model, propertyPath) => {
+    const pathParts = propertyPath.split('.');
+    let value = model;
+    for (const pathPart of pathParts) {
+        if (value === null || typeof value !== 'object' || !Object.prototype.hasOwnProperty.call(value, pathPart)) {
+            return undefined;
+        }
+        value = value[pathPart];
+    }
+    return value;
+};
+const validateUniqueProperties = (model) => {
+    for (const propertyPath of model.uniqueProperties) {
+        if (!VERSIONED_MODEL_PROPERTY_PREFIXES.some(prefix => propertyPath === prefix || propertyPath.startsWith(`${prefix}.`))) {
+            throw new Error(`Model ${model.id} declares unsupported uniqueProperties path ${propertyPath}. Unique properties must reference versioned runtime settings: ${VERSIONED_MODEL_PROPERTY_PREFIXES.join(', ')}.`);
+        }
+        if (getModelPropertyValue(model, propertyPath) === undefined) {
+            throw new Error(`Model ${model.id} declares uniqueProperties path ${propertyPath}, but that value is not set.`);
+        }
+    }
+};
+const getUniquePropertiesKey = (model) => stableJsonStringify(Object.fromEntries(model.uniqueProperties.map(propertyPath => [propertyPath, getModelPropertyValue(model, propertyPath)])));
 const getActiveModels = (models) => {
     const groupedModels = new Map();
+    const activeModels = [];
     for (const model of models) {
         if (!model.active)
             continue;
         const key = getModelReferenceKey(model);
         groupedModels.set(key, [...(groupedModels.get(key) ?? []), model]);
+        activeModels.push(model);
     }
-    const activeModels = [];
     for (const [reference, variants] of groupedModels) {
         if (variants.length === 1) {
-            activeModels.push(variants[0]);
             continue;
         }
-        const details = variants
-            .map(model => `${model.code}${model.extraIdentifier ? ` (extraIdentifier: ${model.extraIdentifier})` : ''}`)
-            .join(', ');
-        throw new Error(`Conflicting active model variants for ${reference}: ${details}. Set active: false on all but one YAML entry for this provider/model code combination.`);
+        const variantsWithoutUniqueProperties = variants.filter(model => model.uniqueProperties.length === 0);
+        if (variantsWithoutUniqueProperties.length > 0) {
+            throw new Error(`Active model variants for ${reference} must declare uniqueProperties: ${variantsWithoutUniqueProperties.map(model => model.id).join(', ')}.`);
+        }
+        const uniquePropertyKeys = new Set();
+        for (const variant of variants) {
+            const key = getUniquePropertiesKey(variant);
+            if (uniquePropertyKeys.has(key)) {
+                throw new Error(`Active model variants for ${reference} do not have distinct uniqueProperties values: ${variants.map(model => model.id).join(', ')}.`);
+            }
+            uniquePropertyKeys.add(key);
+        }
     }
     return activeModels;
 };
@@ -192,16 +244,25 @@ export const loadProviderDefinitions = () => {
 export const loadModelDefinitions = (providersByCode) => {
     const providerMap = providersByCode ?? new Map(loadProviderDefinitions().map(provider => [provider.code, provider]));
     const models = getYamlFilesOrThrow(envConfig.AI_TESTER_MODELS_DIR, 'Model registry').map(file => readYamlFile(file, ModelDefinitionSchema));
-    const seen = new Set();
+    const seenRuntimeIdentities = new Set();
+    const seenIds = new Set();
     for (const model of models) {
         if (!providerMap.has(model.provider)) {
             throw new Error(`Model ${model.code} references missing provider ${model.provider}. Create the provider YAML file first.`);
         }
-        const key = getModelIdentityKey(model);
-        if (seen.has(key)) {
-            throw new Error(`Duplicate runtime model identity found in YAML files: ${key}. Each provider/providerModelCode/extraIdentifier combination must map to exactly one YAML entry.`);
+        if (model.active) {
+            if (seenIds.has(model.id)) {
+                throw new Error(`Duplicate active model id found in YAML files: ${model.id}`);
+            }
+            seenIds.add(model.id);
         }
-        seen.add(key);
+        validateUniqueProperties(model);
+        for (const key of getModelRuntimeIdentityKeys(model)) {
+            if (seenRuntimeIdentities.has(key)) {
+                throw new Error(`Duplicate runtime model identity found in YAML files: ${key}. Each provider/providerModelCode/extraIdentifier/runtime-options combination must map to exactly one YAML entry.`);
+            }
+            seenRuntimeIdentities.add(key);
+        }
     }
     return models;
 };
@@ -210,13 +271,15 @@ export const loadFileBackedModelRegistry = () => {
     const providersByCode = new Map(providers.map(provider => [provider.code, provider]));
     const models = loadModelDefinitions(providersByCode);
     const activeModels = getActiveModels(models);
-    const modelsByReference = new Map(activeModels.map(model => [getModelReferenceKey(model), model]));
+    const modelsById = new Map(activeModels.map(model => [model.id, model]));
+    const modelsByRuntimeIdentity = new Map(activeModels.flatMap(model => getModelRuntimeIdentityKeys(model).map(key => [key, model])));
     return {
         providers,
         providersByCode,
         models,
         activeModels,
-        modelsByReference,
+        modelsById,
+        modelsByRuntimeIdentity,
     };
 };
 let cachedRegistry;
@@ -232,7 +295,7 @@ export const filterConfiguredModels = (models, context, registry = getFileBacked
     const availableModels = [];
     const missingModels = [];
     for (const model of models) {
-        if (registry.modelsByReference.has(`${model.provider}:${model.model}`)) {
+        if (registry.modelsById.has(model.id)) {
             availableModels.push(model);
         }
         else {
@@ -241,9 +304,7 @@ export const filterConfiguredModels = (models, context, registry = getFileBacked
     }
     if (missingModels.length > 0 && !warnedContexts.has(context)) {
         warnedContexts.add(context);
-        console.warn(`Skipping unavailable models in ${context}: ${missingModels
-            .map(model => `${model.provider}:${model.model}`)
-            .join(', ')}`);
+        console.warn(`Skipping unavailable models in ${context}: ${missingModels.map(model => model.id).join(', ')}`);
     }
     return {
         availableModels,

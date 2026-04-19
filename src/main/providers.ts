@@ -7,7 +7,8 @@ import { currencies, modelCosts } from '../database/schema/costs.js'
 import { sessionEvaluations, sessions } from '../database/schema/sessions.js'
 import {
 	clearFileBackedModelRegistryCache,
-	getModelRuntimeOptionsJson,
+	getModelRuntimeIdentityKeys,
+	getModelRuntimeIdentities,
 	loadFileBackedModelRegistry,
 	type FileBackedModelRegistry,
 	type ModelDefinition,
@@ -16,10 +17,6 @@ import {
 import { isCurrencyRegistryConfigured, validateCurrencyRegistryReferences } from '../config/currency-registry.js'
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0]
-
-const getModelIdentityKey = (
-	model: Pick<ModelDefinition, 'provider' | 'providerModelCode' | 'extraIdentifier' | 'providerOptions' | 'thinking'>
-) => `${model.provider}:${model.providerModelCode}:${model.extraIdentifier ?? ''}:${getModelRuntimeOptionsJson(model)}`
 
 const setActiveByIds = async (tx: Transaction, table: typeof providers | typeof models | typeof modelVersions, ids: number[]) => {
 	await tx.update(table).set({ active: false })
@@ -190,13 +187,14 @@ const upsertModelVersion = async (
 	tx: Transaction,
 	providerId: number,
 	modelId: number,
-	modelConfig: ModelDefinition
+	modelConfig: ModelDefinition,
+	runtimeOptionsJson: string
 ) => {
 	let modelVersion = await tx.query.modelVersions.findFirst({
 		where: and(
 				eq(modelVersions.providerId, providerId),
 				eq(modelVersions.providerModelCode, modelConfig.providerModelCode),
-				eq(modelVersions.runtimeOptionsJson, getModelRuntimeOptionsJson(modelConfig)),
+				eq(modelVersions.runtimeOptionsJson, runtimeOptionsJson),
 				modelConfig.extraIdentifier
 					? eq(modelVersions.extraIdentifier, modelConfig.extraIdentifier)
 					: isNull(modelVersions.extraIdentifier)
@@ -220,7 +218,7 @@ const upsertModelVersion = async (
 					providerId,
 					providerModelCode: modelConfig.providerModelCode,
 					extraIdentifier: modelConfig.extraIdentifier,
-					runtimeOptionsJson: getModelRuntimeOptionsJson(modelConfig),
+					runtimeOptionsJson,
 					active: true,
 				})
 			.returning()
@@ -257,7 +255,8 @@ const syncRegistryToDb = async (registry: FileBackedModelRegistry) => {
 		}
 
 		const activeModelVersionIds = new Set<number>()
-		const activeModelIdentityKeys = new Set(registry.activeModels.map(model => getModelIdentityKey(model)))
+		const syncedCostModelVersionIds = new Set<number>()
+		const activeModelIdentityKeys = new Set(registry.activeModels.flatMap(model => getModelRuntimeIdentityKeys(model)))
 		for (const modelConfig of registry.models) {
 			const provider = providersByCode.get(modelConfig.provider)
 			const model = modelsByCode.get(modelConfig.code)
@@ -266,10 +265,15 @@ const syncRegistryToDb = async (registry: FileBackedModelRegistry) => {
 				throw new Error(`Failed to resolve registry entry ${modelConfig.provider}:${modelConfig.providerModelCode}`)
 			}
 
-			const modelVersion = await upsertModelVersion(tx, provider.id, model.id, modelConfig)
-			if (activeModelIdentityKeys.has(getModelIdentityKey(modelConfig))) {
-				activeModelVersionIds.add(modelVersion.id)
-				await syncModelCostsFromYaml(tx, modelVersion.id, modelConfig)
+			for (const identity of getModelRuntimeIdentities(modelConfig)) {
+				const modelVersion = await upsertModelVersion(tx, provider.id, model.id, modelConfig, identity.runtimeOptionsJson)
+				if (activeModelIdentityKeys.has(identity.key)) {
+					activeModelVersionIds.add(modelVersion.id)
+					if (!syncedCostModelVersionIds.has(modelVersion.id)) {
+						await syncModelCostsFromYaml(tx, modelVersion.id, modelConfig)
+						syncedCostModelVersionIds.add(modelVersion.id)
+					}
+				}
 			}
 		}
 
