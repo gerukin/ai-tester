@@ -92,6 +92,7 @@ Fields:
 - `active`: Optional model-version switch. Defaults to `true`. Inactive model versions are excluded from runs and reports.
 - `uniqueProperties`: Optional list of versioned runtime property paths that explain what makes this definition unique among active variants of the same provider model.
 - `providerOptions`: Optional provider-specific request fields to pass through for this model version.
+- `providerTools`: Optional provider-executed/server-side tool objects to include with each plain-text model request. These objects are passed through unchanged; the app does not validate or translate provider-specific tool shapes.
 - `thinking`: Optional per-model thinking/reasoning settings. Use this for provider-agnostic options such as reasoning effort, thinking token budgets, or custom reasoning tag extraction when supported by the provider wrapper.
 - `capabilities`: Optional model capability declaration used to skip unsupported test/model pairs before provider calls. When omitted, runs preserve current behavior and print a warning. When present, omitted capability keys default to `false`.
 - `candidateOverrides`: Optional candidate-only runtime overrides. These merge on top of the base `providerOptions` and `thinking`.
@@ -99,6 +100,21 @@ Fields:
 - `costs`: Full cost history for this model version. This array is the source of truth.
 
 `providerOptions` is the escape hatch for anything provider-specific that is not modeled directly by the app.
+
+For example, an OpenRouter server-side web search tool can be configured on the model:
+
+```yaml
+id: openrouter/openai-gpt-5.4-mini/web-search
+code: gpt-5.4-mini-openrouter
+provider: openrouter
+providerModelCode: openai/gpt-5.4-mini
+providerTools:
+  - type: openrouter:web_search
+    parameters:
+      engine: native
+```
+
+Use the exact object shape expected by the provider API. `ai-tester` appends the object to the final request alongside any local/function tools.
 
 `thinking` is the portable layer used by the app to map common reasoning options to each provider:
 
@@ -109,7 +125,7 @@ Fields:
 
 When the same model needs different runtime options as a candidate versus an evaluator, put the shared settings in `providerOptions` / `thinking` and only the differences in `candidateOverrides` / `evaluatorOverrides`.
 
-When multiple active YAML files share the same `provider` and `providerModelCode`, each variant must have a distinct `id` and declare `uniqueProperties` whose values distinguish the variants. Unique properties must refer to versioned runtime settings such as `extraIdentifier`, `providerOptions`, `thinking`, `candidateOverrides`, or `evaluatorOverrides`.
+When multiple active YAML files share the same `provider` and `providerModelCode`, each variant must have a distinct `id` and declare `uniqueProperties` whose values distinguish the variants. Unique properties must refer to versioned runtime settings such as `extraIdentifier`, `providerOptions`, `providerTools`, `thinking`, `candidateOverrides`, or `evaluatorOverrides`.
 
 Example:
 

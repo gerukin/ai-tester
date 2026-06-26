@@ -22,6 +22,15 @@ const logSkippedTests = (attempts, attempt) => {
         console.log(`⏭️ Skipping ${skippedAttempts} similar attempt(s)...`);
     return skippedAttempts;
 };
+const getAnswerFromTextResponse = (response) => {
+    const text = response.text.trim();
+    if (text.length > 0)
+        return text;
+    if (response.toolCalls?.length > 0) {
+        return JSON.stringify(response.toolCalls.map(call => ({ name: call.toolName, arguments: call.input })));
+    }
+    return text;
+};
 const getMissingTests = async (db, testsConfig, registry, envConfig, { log = true } = {}) => {
     if (log)
         console.log('Checking for tests to run...');
@@ -233,13 +242,7 @@ export const runAllTestsWithDeps = async ({ db, testsConfig, registry, confirmRu
                     i += logSkippedTests(testsConfig.attempts, attempt);
                     break;
                 }
-                // if we called a tool, we need to extract the call(s) as the answer
-                if (response.toolCalls?.length > 0) {
-                    answer = JSON.stringify(response.toolCalls.map(call => ({ name: call.toolName, arguments: call.input })));
-                }
-                else {
-                    answer = response.text.trim();
-                }
+                answer = getAnswerFromTextResponse(response);
             }
             reasoning = getTrimmedReasoningText(response.reasoningText);
             const endTime = Date.now();

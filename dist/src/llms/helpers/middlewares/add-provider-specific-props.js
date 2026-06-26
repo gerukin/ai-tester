@@ -1,3 +1,4 @@
+const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 /** Middleware to inject provider specific properties. */
 export const addProviderSpecificProps = (provider, props) => ({
     specificationVersion: 'v3',
@@ -6,7 +7,10 @@ export const addProviderSpecificProps = (provider, props) => ({
             ...params,
             providerOptions: {
                 ...params.providerOptions,
-                [provider]: props,
+                [provider]: {
+                    ...(isRecord(params.providerOptions?.[provider]) ? params.providerOptions[provider] : {}),
+                    ...props,
+                },
             },
         };
     },
