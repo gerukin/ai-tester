@@ -92,10 +92,14 @@ export type RuntimeOptionsOverride = z.infer<typeof RuntimeOptionsOverrideSchema
 const VERSIONED_MODEL_PROPERTY_PREFIXES = [
 	'extraIdentifier',
 	'providerOptions',
+	'providerTools',
 	'thinking',
 	'candidateOverrides',
 	'evaluatorOverrides',
 ] as const
+
+export const ProviderToolDefinitionSchema = z.record(JsonValueSchema)
+export type ProviderToolDefinition = z.infer<typeof ProviderToolDefinitionSchema>
 
 export const ModelDefinitionSchema = z
 	.object({
@@ -113,6 +117,7 @@ export const ModelDefinitionSchema = z
 		),
 		active: z.boolean().default(true),
 		providerOptions: z.record(JsonValueSchema).default({}),
+		providerTools: z.array(ProviderToolDefinitionSchema).default([]),
 		thinking: ThinkingConfigSchema,
 		capabilities: ModelCapabilitiesSchema.optional(),
 		candidateOverrides: RuntimeOptionsOverrideSchema.optional(),
@@ -178,7 +183,11 @@ export const getModelRuntimeOptions = (model: Pick<ModelDefinition, 'providerOpt
 })
 
 export const getEffectiveModelRuntimeOptions = (
-	model: Pick<ModelDefinition, 'providerOptions' | 'thinking' | 'candidateOverrides' | 'evaluatorOverrides'>,
+	model: Pick<
+		ModelDefinition,
+		'providerOptions' | 'thinking' | 'candidateOverrides' | 'evaluatorOverrides'
+	> &
+		Partial<Pick<ModelDefinition, 'providerTools'>>,
 	type: ModelRole
 ) => {
 	const overrides = type === 'candidate' ? model.candidateOverrides : model.evaluatorOverrides
@@ -187,6 +196,7 @@ export const getEffectiveModelRuntimeOptions = (
 			...(model.providerOptions ?? {}),
 			...(overrides?.providerOptions ?? {}),
 		},
+		providerTools: model.providerTools ?? [],
 		thinking:
 			model.thinking !== undefined || overrides?.thinking !== undefined
 				? {
@@ -198,12 +208,17 @@ export const getEffectiveModelRuntimeOptions = (
 }
 
 export const getModelRuntimeOptionsJson = (
-	model: Pick<ModelDefinition, 'providerOptions' | 'thinking' | 'candidateOverrides' | 'evaluatorOverrides'>,
+	model: Pick<
+		ModelDefinition,
+		'providerOptions' | 'thinking' | 'candidateOverrides' | 'evaluatorOverrides'
+	> &
+		Partial<Pick<ModelDefinition, 'providerTools'>>,
 	role: ModelRole
 ) => {
 	const options = getEffectiveModelRuntimeOptions(model, role)
 	return stableJsonStringify({
 		providerOptions: options.providerOptions,
+		...(options.providerTools.length > 0 ? { providerTools: options.providerTools } : {}),
 		thinking: options.thinking ?? null,
 	})
 }
@@ -227,6 +242,7 @@ export const getModelRuntimeIdentityKey = (
 		| 'providerModelCode'
 		| 'extraIdentifier'
 		| 'providerOptions'
+		| 'providerTools'
 		| 'thinking'
 		| 'candidateOverrides'
 		| 'evaluatorOverrides'
@@ -247,6 +263,7 @@ export const getModelRuntimeIdentityKeys = (
 		| 'providerModelCode'
 		| 'extraIdentifier'
 		| 'providerOptions'
+		| 'providerTools'
 		| 'thinking'
 		| 'candidateOverrides'
 		| 'evaluatorOverrides'
@@ -260,6 +277,7 @@ export const getModelRuntimeIdentities = (
 		| 'providerModelCode'
 		| 'extraIdentifier'
 		| 'providerOptions'
+		| 'providerTools'
 		| 'thinking'
 		| 'candidateOverrides'
 		| 'evaluatorOverrides'

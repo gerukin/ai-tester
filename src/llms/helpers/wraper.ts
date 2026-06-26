@@ -13,13 +13,17 @@ const getProviderOptionsNamespace = (providerId: string) => {
 }
 
 const buildPerModelMiddlewares = (
-	modelConfig: Pick<ModelDefinition, 'providerOptions' | 'thinking' | 'candidateOverrides' | 'evaluatorOverrides'>,
+	modelConfig: Pick<
+		ModelDefinition,
+		'providerOptions' | 'thinking' | 'candidateOverrides' | 'evaluatorOverrides'
+	> &
+		Partial<Pick<ModelDefinition, 'providerTools'>>,
 	providerMetadataKey: string | undefined,
 	supportsReasoningExtraction: boolean,
 	type: ModelType
 ): LanguageModelMiddleware[] => {
 	const middlewares: LanguageModelMiddleware[] = []
-	const { providerOptions, thinking } = getEffectiveModelRuntimeOptions(modelConfig, type)
+	const { providerOptions, providerTools, thinking } = getEffectiveModelRuntimeOptions(modelConfig, type)
 
 	if (supportsReasoningExtraction) {
 		if (thinking !== undefined && thinking.enabled !== false) {
@@ -30,6 +34,9 @@ const buildPerModelMiddlewares = (
 	if (!providerMetadataKey) return middlewares
 
 	const props: Record<string, JSONValue> = { ...(providerOptions as Record<string, JSONValue>) }
+	if (providerTools.length > 0) {
+		props['providerTools'] = providerTools as JSONValue
+	}
 
 	switch (providerMetadataKey) {
 		case 'vertex': {
@@ -77,8 +84,9 @@ export const wrapModel = (
 	type: ModelType,
 	modelConfig?: Pick<
 		ModelDefinition,
-		'provider' | 'providerOptions' | 'thinking' | 'candidateOverrides' | 'evaluatorOverrides'
-	>
+		'providerOptions' | 'thinking' | 'candidateOverrides' | 'evaluatorOverrides'
+	> &
+		Partial<Pick<ModelDefinition, 'providerTools'>>
 ) => {
 	if (modelConfig === undefined) return model
 

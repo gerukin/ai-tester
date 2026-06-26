@@ -210,6 +210,64 @@ test('ollama tool-call sessions pass tool schemas and persist serialized tool ca
 	assert.deepStrictEqual(Object.keys(calls[0]?.tools as Record<string, unknown>), ['cityWeather'])
 })
 
+test('tool-call sessions prefer text answer when response also includes tool calls', async t => {
+	const harness = await createTestDatabase()
+	t.after(async () => {
+		await harness.cleanup()
+	})
+
+	await insertProviderModel(harness.db, {
+		providerCode: 'openai',
+		providerName: 'OpenAI',
+		modelCode: 'gpt-tool-text',
+		providerModelCode: 'gpt-tool-text',
+	})
+	const { promptVersion } = await insertPromptVersion(harness.db, {
+		code: 'tool-text-prompt',
+		content: 'Use tools when useful.',
+	})
+	const { toolVersion } = await insertToolVersion(harness.db, {
+		code: 'city-weather-text',
+		schemaObject: {
+			name: 'cityWeather',
+			description: 'Look up the weather for a city',
+			parameters: {
+				type: 'object',
+				properties: {
+					cityName: { type: 'string' },
+				},
+				required: ['cityName'],
+				additionalProperties: false,
+			},
+		},
+	})
+	await insertTestVersion(harness.db, {
+		content: '# 👤\n\nWhat is the weather in Tokyo?',
+		tagNames: ['tool_use'],
+		systemPromptVersionId: promptVersion.id,
+		toolVersionIds: [toolVersion.id],
+		hash: 'tool-call-with-text-test',
+	})
+
+	await runAllTestsWithDeps(
+		createDeps({
+			db: harness.db,
+			testsDir: harness.rootDir,
+			providerCode: 'openai',
+			modelCode: 'gpt-tool-text',
+			generateText: async () => ({
+				text: '  It is warm in Tokyo.  ',
+				toolCalls: [{ toolName: 'cityWeather', input: { cityName: 'Tokyo' } }],
+				usage: { inputTokens: 9, outputTokens: 7 },
+			}),
+		})
+	)
+
+	const sessions = await harness.db.select().from(schema.sessions)
+	assert.strictEqual(sessions.length, 1)
+	assert.strictEqual(sessions[0]?.answer, 'It is warm in Tokyo.')
+})
+
 test('ollama structured-output sessions persist serialized objects with reasoning text', async t => {
 	const harness = await createTestDatabase()
 	t.after(async () => {

@@ -477,6 +477,86 @@ test('model registry loads capabilities and defaults missing capability keys to 
 	})
 })
 
+test('model registry loads opaque provider tools and includes them in runtime identity', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	await env.write(
+		'data/providers/compatible.yaml',
+		[
+			'code: compatible',
+			'name: Compatible',
+			'type: openai-compatible',
+			'baseURL: https://compatible.example.com/v1',
+			'apiKeyEnvVar: COMPATIBLE_API_KEY',
+		].join('\n')
+	)
+	await env.write(
+		'data/models/gpt-5-mini.yaml',
+		[
+			'id: compatible/example-model/server-tools',
+			'code: example-model-compatible',
+			'provider: compatible',
+			'providerModelCode: example/model',
+			'providerTools:',
+			'  - type: vendor:server_tool',
+			'    mode: native',
+			'    parameters:',
+			'      arbitrary_number: 5',
+			'      arbitrary_list:',
+			'        - one',
+			'        - two',
+		].join('\n')
+	)
+
+	const models = expectModuleSuccess(env.runModule('modelRegistry:loadModels')) as Array<{
+		providerTools?: Array<Record<string, unknown>>
+	}>
+	const identities = expectModuleSuccess(env.runModule('modelRegistry:getRuntimeIdentities')) as Array<{
+		runtimeOptionsJson: string
+	}>
+
+	assert.deepStrictEqual(models[0]?.providerTools, [
+		{
+			type: 'vendor:server_tool',
+			mode: 'native',
+			parameters: {
+				arbitrary_number: 5,
+				arbitrary_list: ['one', 'two'],
+			},
+		},
+	])
+	assert.match(identities[0]?.runtimeOptionsJson ?? '', /"providerTools":/)
+	assert.match(identities[0]?.runtimeOptionsJson ?? '', /"vendor:server_tool"/)
+})
+
+test('model registry does not validate provider tool shapes against provider type', async t => {
+	const env = await createSyncTestEnv()
+	t.after(async () => {
+		await env.cleanup()
+	})
+
+	await env.write('data/providers/openai.yaml', ['code: openai', 'name: OpenAI', 'type: openai'].join('\n'))
+	await env.write(
+		'data/models/gpt-5-mini.yaml',
+		[
+			'code: gpt-5-mini',
+			'provider: openai',
+			'providerModelCode: gpt-5-mini',
+			'providerTools:',
+			'  - type: vendor:server_tool',
+			'    custom_setting: true',
+		].join('\n')
+	)
+
+	const models = expectModuleSuccess(env.runModule('modelRegistry:loadModels')) as Array<{
+		providerTools?: Array<Record<string, unknown>>
+	}>
+	assert.deepStrictEqual(models[0]?.providerTools, [{ type: 'vendor:server_tool', custom_setting: true }])
+})
+
 test('model registry rejects invalid capability declarations', async t => {
 	const env = await createSyncTestEnv()
 	t.after(async () => {

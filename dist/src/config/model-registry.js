@@ -71,10 +71,12 @@ const RuntimeOptionsOverrideSchema = z.object({
 const VERSIONED_MODEL_PROPERTY_PREFIXES = [
     'extraIdentifier',
     'providerOptions',
+    'providerTools',
     'thinking',
     'candidateOverrides',
     'evaluatorOverrides',
 ];
+export const ProviderToolDefinitionSchema = z.record(JsonValueSchema);
 export const ModelDefinitionSchema = z
     .object({
     id: z.string().min(1).optional(),
@@ -89,6 +91,7 @@ export const ModelDefinitionSchema = z
     }, z.string().optional()),
     active: z.boolean().default(true),
     providerOptions: z.record(JsonValueSchema).default({}),
+    providerTools: z.array(ProviderToolDefinitionSchema).default([]),
     thinking: ThinkingConfigSchema,
     capabilities: ModelCapabilitiesSchema.optional(),
     candidateOverrides: RuntimeOptionsOverrideSchema.optional(),
@@ -142,6 +145,7 @@ export const getEffectiveModelRuntimeOptions = (model, type) => {
             ...(model.providerOptions ?? {}),
             ...(overrides?.providerOptions ?? {}),
         },
+        providerTools: model.providerTools ?? [],
         thinking: model.thinking !== undefined || overrides?.thinking !== undefined
             ? {
                 ...(model.thinking ?? {}),
@@ -154,6 +158,7 @@ export const getModelRuntimeOptionsJson = (model, role) => {
     const options = getEffectiveModelRuntimeOptions(model, role);
     return stableJsonStringify({
         providerOptions: options.providerOptions,
+        ...(options.providerTools.length > 0 ? { providerTools: options.providerTools } : {}),
         thinking: options.thinking ?? null,
     });
 };

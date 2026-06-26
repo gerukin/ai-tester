@@ -1,5 +1,8 @@
 import type { JSONValue, LanguageModelMiddleware } from 'ai'
 
+const isRecord = (value: unknown): value is Record<string, JSONValue> =>
+	value !== null && typeof value === 'object' && !Array.isArray(value)
+
 /** Middleware to inject provider specific properties. */
 export const addProviderSpecificProps = (
 	provider: string,
@@ -12,7 +15,10 @@ export const addProviderSpecificProps = (
 
 			providerOptions: {
 				...params.providerOptions,
-				[provider]: props,
+				[provider]: {
+					...(isRecord(params.providerOptions?.[provider]) ? params.providerOptions[provider] : {}),
+					...props,
+				},
 			},
 		}
 	},

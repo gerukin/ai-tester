@@ -55,6 +55,10 @@ const operationMap = {
 	},
 	'modelRegistry:loadProviders': async () => (await import('../../src/config/model-registry.js')).loadProviderDefinitions(),
 	'modelRegistry:loadModels': async () => (await import('../../src/config/model-registry.js')).loadModelDefinitions(),
+	'modelRegistry:getRuntimeIdentities': async () => {
+		const modelRegistry = await import('../../src/config/model-registry.js')
+		return modelRegistry.loadModelDefinitions().flatMap(model => modelRegistry.getModelRuntimeIdentities(model))
+	},
 	'modelRegistry:loadRegistry': async () => {
 		const registry = (await import('../../src/config/model-registry.js')).loadFileBackedModelRegistry()
 		return {

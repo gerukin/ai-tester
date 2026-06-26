@@ -10,7 +10,7 @@ const getProviderOptionsNamespace = (providerId) => {
 };
 const buildPerModelMiddlewares = (modelConfig, providerMetadataKey, supportsReasoningExtraction, type) => {
     const middlewares = [];
-    const { providerOptions, thinking } = getEffectiveModelRuntimeOptions(modelConfig, type);
+    const { providerOptions, providerTools, thinking } = getEffectiveModelRuntimeOptions(modelConfig, type);
     if (supportsReasoningExtraction) {
         if (thinking !== undefined && thinking.enabled !== false) {
             middlewares.push(extractReasoningMiddleware({ tagName: thinking?.extractionTagName ?? 'think' }));
@@ -19,6 +19,9 @@ const buildPerModelMiddlewares = (modelConfig, providerMetadataKey, supportsReas
     if (!providerMetadataKey)
         return middlewares;
     const props = { ...providerOptions };
+    if (providerTools.length > 0) {
+        props['providerTools'] = providerTools;
+    }
     switch (providerMetadataKey) {
         case 'vertex': {
             if (thinking !== undefined && (thinking.budgetTokens !== undefined || thinking.includeThoughts !== undefined)) {

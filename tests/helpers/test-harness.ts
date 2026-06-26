@@ -234,6 +234,7 @@ export const createRegistry = (
 		...model,
 		id: model.id ?? `${model.provider}/${model.providerModelCode}`,
 		providerOptions: model.providerOptions ?? {},
+		providerTools: model.providerTools ?? [],
 		thinking: model.thinking,
 		candidateOverrides: model.candidateOverrides,
 		evaluatorOverrides: model.evaluatorOverrides,
