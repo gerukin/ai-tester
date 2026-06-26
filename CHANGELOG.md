@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-06-26
+
+### Added
+
+- Model YAML definitions can now declare opaque providerTools objects for provider-executed server-side tools, preserving provider-specific tool payloads alongside local AI SDK tools and preferring non-empty text responses as session answers.
+
 ## [0.20.0] - 2026-04-19
 
 ### Added
@@ -224,7 +230,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - 🎉 Version `0.9.0` is out... with all the base features. It isn't quite yet stable or tested enough to be relied upon.
 
-[Unreleased]: https://github.com/gerukin/ai-tester/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/gerukin/ai-tester/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/gerukin/ai-tester/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/gerukin/ai-tester/compare/v0.19.1...v0.20.0
 [0.19.1]: https://github.com/gerukin/ai-tester/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/gerukin/ai-tester/compare/v0.18.1...v0.19.0
